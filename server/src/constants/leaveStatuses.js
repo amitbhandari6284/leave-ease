@@ -1,0 +1,8 @@
+export const LEAVE_STATUSES = Object.freeze({
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+});
+
+export const LEAVE_STATUS_VALUES = Object.values(LEAVE_STATUSES);
