@@ -9,16 +9,6 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed:admin": "node src/seeds/seedAdmin.js",
-    "seed:test-users": "node src/seeds/seedTestUsers.js",
-    "seed:leave-balances": "node src/seeds/seedLeaveBalances.js",
-    "seed:notification": "node src/seeds/seedNotification.js",
-    "seed:audit-log": "node src/seeds/seedAuditLog.js",
-    "test:working-days": "node src/tests/calculateWorkingDays.test.js",
-    "test:integration": "node --env-file=.env.test --test --test-concurrency=1 src/tests/integration/*.test.js",
-    "test:auth": "node --env-file=.env.test --test --test-concurrency=1 src/tests/integration/auth.integration.test.js",
-    "test:leave": "node --env-file=.env.test --test --test-concurrency=1 src/tests/integration/leaveLifecycle.integration.test.js",
-    "test:rbac": "node --env-file=.env.test --test --test-concurrency=1 src/tests/integration/rbacAdmin.integration.test.js",
     "check:env": "node --env-file=.env -e \"import('./src/config/validateEnvironment.js').then(({ validateEnvironment }) => { validateEnvironment(); console.log('Environment configuration is valid'); })\""
   },
   "dependencies": {
