@@ -11,6 +11,7 @@ import { buildAuditChanges, createAuditLog, runAuditTask } from "../auditLogs/au
 import { initializeLeaveBalancesForUser } from "../leaveBalances/leaveBalance.service.js";
 
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../../constants/audit.js";
+import { AppError } from "../../utils/AppError.js";
 
 const EDITABLE_USER_FIELDS = [
   "name",
@@ -27,6 +28,13 @@ const EDITABLE_USER_FIELDS = [
 
 const RESTRICTED_USER_FIELDS = ["password", "isActive", "mustChangePassword", "lastLoginAt"];
 
+// Used everywhere we send a user back to the client, so the shape stays
+// consistent across create/update/status endpoints instead of drifting.
+const USER_POPULATE_OPTIONS = [
+  { path: "department", select: "name code isActive" },
+  { path: "manager", select: "name email employeeId role designation isActive" },
+];
+
 function hasOwn(object, property) {
   return Object.prototype.hasOwnProperty.call(object, property);
 }
@@ -35,7 +43,6 @@ function normalizeNullableId(value) {
   if (value === null || value === "") {
     return null;
   }
-
   return value;
 }
 
@@ -66,7 +73,9 @@ async function validateManager(managerId) {
   if (!manager.isActive) throw new AppError("Selected manager is inactive", 400, "INACTIVE_ACCOUNT");
 
   if (manager.role !== USER_ROLES.HR_MANAGER)
-    throw new Error("The assigned manager must hold the HR Manager role.", 400, "INVALID_MANAGER_ROLE");
+    // Was `new Error(...)` before - regular Error ignores the status/code args,
+    // so this was silently turning into a generic 500 instead of a 400.
+    throw new AppError("The assigned manager must hold the HR Manager role.", 400, "INVALID_MANAGER_ROLE");
 
   return manager;
 }
@@ -140,8 +149,11 @@ export async function createUser(req, res, next) {
       try {
         createdBalances = await initializeLeaveBalancesForUser(user._id);
       } catch (error) {
+        // Balance init failed, so roll back the user we just created and bail out.
+        // Missing `return` here used to let the function fall through to the
+        // audit log + success response even after deleting the user.
         await User.findByIdAndDelete(user._id);
-        throw error;
+        return next(error);
       }
     }
     await runAuditTask("user-created", () =>
@@ -176,16 +188,7 @@ export async function createUser(req, res, next) {
       }),
     );
 
-    await user.populate([
-      {
-        path: "department",
-        select: "name code isActive",
-      },
-      {
-        path: "manager",
-        select: "name email employeeId role designation",
-      },
-    ]);
+    await user.populate(USER_POPULATE_OPTIONS);
 
     return res.status(201).json({
       success: true,
@@ -205,21 +208,17 @@ export async function getUsers(req, res, next) {
     const parsedPage = Number(page);
     const parsedLimit = Number(limit);
 
-    if (!Number.isInteger(parsedPage) || parsedPage < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Page must be a positive integer",
-      });
-    }
+    if (!Number.isInteger(parsedPage) || parsedPage < 1)
+      throw new AppError("Page must be a positive integer", 400, "INVALID_PAGINATION_PAGE");
 
-    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50) {
-      return res.status(400).json({
-        success: false,
-        message: "Limit must be between 1 and 50",
-      });
-    }
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50)
+      throw new AppError("The limit parameter must be an integer between 1 and 50.", 400, "INVALID_PAGINATION_LIMIT");
 
     const filter = {};
+
+    // computed once here so we don't redo the trim/uppercase down in the
+    // `filters` block of the response
+    const normalizedRole = typeof role === "string" ? role.trim().toUpperCase() : null;
 
     const trimmedSearch = typeof search === "string" ? search.trim() : "";
 
@@ -254,48 +253,33 @@ export async function getUsers(req, res, next) {
       ];
     }
 
-    if (role) {
-      const normalizedRole = role.trim().toUpperCase();
-
-      if (!USER_ROLE_VALUES.includes(normalizedRole)) {
-        return res.status(400).json({
-          success: false,
-          message: `Role must be one of: ${USER_ROLE_VALUES.join(", ")}`,
-        });
-      }
+    if (normalizedRole) {
+      if (!USER_ROLE_VALUES.includes(normalizedRole))
+        throw new AppError(
+          `The specified role filter is invalid. It must be one of the following: ${USER_ROLE_VALUES.join(", ")}.`,
+          400,
+          "INVALID_FILTER_ROLE",
+        );
 
       filter.role = normalizedRole;
     }
 
     if (department) {
-      if (!mongoose.isValidObjectId(department)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid department ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(department))
+        throw new AppError("The provided department filter ID is invalid.", 400, "INVALID_IDENTIFIER");
 
       const departmentExists = await Department.exists({
         _id: department,
       });
 
-      if (!departmentExists) {
-        return res.status(404).json({
-          success: false,
-          message: "Department not found",
-        });
-      }
+      if (!departmentExists) throw new AppError("The requested department does not exist.", 404, "DEPARTMENT_NOT_FOUND");
 
       filter.department = department;
     }
 
     if (isActive !== undefined) {
-      if (isActive !== "true" && isActive !== "false") {
-        return res.status(400).json({
-          success: false,
-          message: "isActive must be true or false",
-        });
-      }
+      if (isActive !== "true" && isActive !== "false")
+        throw new AppError("The isActive parameter must be a valid boolean value (true or false).", 400, "INVALID_BOOLEAN_VALUE");
 
       filter.isActive = isActive === "true";
     }
@@ -304,8 +288,7 @@ export async function getUsers(req, res, next) {
 
     const [users, totalUsers] = await Promise.all([
       User.find(filter)
-        .populate("department", "name code isActive")
-        .populate("manager", "name email employeeId designation role")
+        .populate(USER_POPULATE_OPTIONS)
         .sort({
           createdAt: -1,
         })
@@ -322,7 +305,7 @@ export async function getUsers(req, res, next) {
 
       filters: {
         search: trimmedSearch || null,
-        role: role ? role.trim().toUpperCase() : null,
+        role: normalizedRole,
         department: department || null,
         isActive: isActive === undefined ? null : isActive === "true",
       },
@@ -348,97 +331,77 @@ export async function updateUser(req, res, next) {
   try {
     const { userId } = req.params;
 
-    if (!mongoose.isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(userId)) throw new AppError("The provided user ID is invalid.", 400, "INVALID_IDENTIFIER");
 
     const restrictedField = RESTRICTED_USER_FIELDS.find((field) => hasOwn(req.body, field));
 
-    if (restrictedField) {
-      return res.status(400).json({
-        success: false,
-        message: `${restrictedField} cannot be updated through this endpoint`,
-      });
-    }
+    if (restrictedField)
+      throw new AppError(
+        `The field '${restrictedField}' is read-only and cannot be updated through this endpoint.`,
+        400,
+        "RESTRICTED_FIELD_UPDATE",
+      );
 
     const providedFields = EDITABLE_USER_FIELDS.filter((field) => hasOwn(req.body, field));
 
-    if (providedFields.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No editable user fields were provided",
-      });
-    }
+    if (providedFields.length === 0)
+      throw new AppError("No editable fields were provided in the request body.", 400, "MISSING_UPDATE_DATA");
 
     const user = await User.findById(userId);
 
-    const auditBeforeUser = user.toObject();
+    if (!user) throw new AppError("The requested user could not be found.", 404, "USER_NOT_FOUND");
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    // Snapshot before we start mutating, so buildAuditChanges has something to diff against.
+    const auditBeforeUser = user.toObject();
 
     const nextRole = hasOwn(req.body, "role") ? String(req.body.role).trim().toUpperCase() : user.role;
 
-    if (!USER_ROLE_VALUES.includes(nextRole)) {
-      return res.status(400).json({
-        success: false,
-        message: `Role must be one of: ${USER_ROLE_VALUES.join(", ")}`,
-      });
-    }
+    if (!USER_ROLE_VALUES.includes(nextRole))
+      throw new AppError(
+        `The specified role is invalid. It must be one of the following: ${USER_ROLE_VALUES.join(", ")}.`,
+        400,
+        "INVALID_FILTER_ROLE",
+      );
 
-    /*
-      For the MVP, administrator accounts cannot be created
-      or removed through a general user-edit endpoint.
-    */
-    if (user.role === USER_ROLES.ADMIN && nextRole !== USER_ROLES.ADMIN) {
-      return res.status(400).json({
-        success: false,
-        message: "An Administrator account cannot be changed to another role",
-      });
-    }
+    if (user.role === USER_ROLES.ADMIN && nextRole !== USER_ROLES.ADMIN)
+      throw new AppError("An Administrator account cannot be changed to a different role.", 400, "ADMIN_ROLE_UPDATE_FORBIDDEN");
 
-    if (user.role !== USER_ROLES.ADMIN && nextRole === USER_ROLES.ADMIN) {
-      return res.status(400).json({
-        success: false,
-        message: "A user cannot be promoted to Administrator through this endpoint",
-      });
-    }
+    if (user.role !== USER_ROLES.ADMIN && nextRole === USER_ROLES.ADMIN)
+      throw new AppError(
+        "A user cannot be promoted to the Administrator role through this endpoint.",
+        400,
+        "ADMIN_PROMOTION_FORBIDDEN",
+      );
 
-    /*
-      Prevent an HR Manager from becoming an employee while
-      departments or users still depend on them as manager.
-    */
+    // Prevent an HR Manager from becoming an employee while, departments or users still depend on them as manager.
+
     if (user.role === USER_ROLES.HR_MANAGER && nextRole !== USER_ROLES.HR_MANAGER) {
       const [managedDepartment, managedUser] = await Promise.all([
         Department.exists({
           manager: user._id,
         }),
 
+        // isActive: true to match the same check in updateUserStatus - an
+        // inactive report shouldn't block this manager's role change.
         User.exists({
           manager: user._id,
+          isActive: true,
         }),
       ]);
 
-      if (managedDepartment) {
-        return res.status(409).json({
-          success: false,
-          message: "Reassign the departments managed by this user before changing their role",
-        });
-      }
+      if (managedDepartment)
+        throw new AppError(
+          "Please reassign all departments managed by this user before changing their role.",
+          409,
+          "DEPARTMENTS_REASSIGNMENT_REQUIRED",
+        );
 
-      if (managedUser) {
-        return res.status(409).json({
-          success: false,
-          message: "Reassign employees reporting to this user before changing their role",
-        });
-      }
+      if (managedUser)
+        throw new AppError(
+          "Please reassign all departments managed by this user before changing their role.",
+          409,
+          "DEPARTMENTS_REASSIGNMENT_REQUIRED",
+        );
     }
 
     let nextDepartment = hasOwn(req.body, "department")
@@ -447,68 +410,42 @@ export async function updateUser(req, res, next) {
 
     let nextManager = hasOwn(req.body, "manager") ? normalizeNullableId(req.body.manager) : user.manager?.toString() || null;
 
-    /*
-      Admin accounts do not belong to departments and do not
-      report to an HR Manager.
-    */
-    if (nextRole === USER_ROLES.ADMIN) {
-      if (hasOwn(req.body, "department") && nextDepartment !== null) {
-        return res.status(400).json({
-          success: false,
-          message: "Administrator accounts cannot belong to a department",
-        });
-      }
+    // Admin accounts do not belong to departments and do not report to an HR Manager.
 
-      if (hasOwn(req.body, "manager") && nextManager !== null) {
-        return res.status(400).json({
-          success: false,
-          message: "Administrator accounts cannot have a manager",
-        });
-      }
+    if (nextRole === USER_ROLES.ADMIN) {
+      if (hasOwn(req.body, "department") && nextDepartment !== null)
+        throw new AppError(
+          "Administrator accounts cannot be assigned to a department.",
+          400,
+          "ADMIN_DEPARTMENT_ASSIGNMENT_FORBIDDEN",
+        );
+      if (hasOwn(req.body, "manager") && nextManager !== null)
+        throw new AppError("Administrator accounts cannot be assigned to a manager.", 400, "ADMIN_MANAGER_ASSIGNMENT_FORBIDDEN");
 
       nextDepartment = null;
       nextManager = null;
     } else {
-      if (!nextDepartment) {
-        return res.status(400).json({
-          success: false,
-          message: "A department is required for Employees and HR Managers",
-        });
-      }
+      if (!nextDepartment)
+        throw new AppError("A department assignment is required for Employees and HR Managers.", 400, "DEPARTMENT_REQUIRED");
 
-      if (!mongoose.isValidObjectId(nextDepartment)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid department ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(nextDepartment))
+        throw new AppError("The provided department ID is invalid.", 400, "INVALID_IDENTIFIER");
 
       const selectedDepartment = await Department.findOne({
         _id: nextDepartment,
         isActive: true,
       });
 
-      if (!selectedDepartment) {
-        return res.status(404).json({
-          success: false,
-          message: "Department does not exist or is inactive",
-        });
-      }
+      if (!selectedDepartment) throw new AppError("The requested department does not exist.", 404, "DEPARTMENT_NOT_FOUND");
 
       if (nextManager) {
-        if (!mongoose.isValidObjectId(nextManager)) {
-          return res.status(400).json({
-            success: false,
-            message: "Invalid manager ID",
-          });
-        }
+        if (!mongoose.isValidObjectId(nextManager))
+          throw new AppError("The provided manager ID is invalid.", 400, "INVALID_IDENTIFIER");
 
-        if (nextManager.toString() === user._id.toString()) {
-          return res.status(400).json({
-            success: false,
-            message: "A user cannot be their own manager",
-          });
-        }
+        // Was returning res.status(400).json(...) directly here, which skips
+        // the AppError -> next(error) pipeline everything else uses.
+        if (nextManager.toString() === user._id.toString())
+          throw new AppError("A user cannot be their own manager.", 400, "SELF_MANAGEMENT_FORBIDDEN");
 
         const selectedManager = await User.findOne({
           _id: nextManager,
@@ -516,19 +453,17 @@ export async function updateUser(req, res, next) {
           isActive: true,
         });
 
-        if (!selectedManager) {
-          return res.status(400).json({
-            success: false,
-            message: "Manager must be an active HR Manager",
-          });
-        }
+        // Note: this message used to say "cannot be assigned as their own manager",
+        // which was copy-pasted from the self-manager check above and didn't
+        // actually describe this case (manager missing / not an active HR Manager).
+        if (!selectedManager) throw new AppError("The selected manager must be an active HR Manager.", 404, "MANAGER_NOT_FOUND");
 
-        if (!selectedManager.department || selectedManager.department.toString() !== nextDepartment.toString()) {
-          return res.status(400).json({
-            success: false,
-            message: "Manager and user must belong to the same department",
-          });
-        }
+        if (!selectedManager.department || selectedManager.department.toString() !== nextDepartment.toString())
+          throw new AppError(
+            "The selected manager must belong to the same department as the user.",
+            400,
+            "MANAGER_DEPARTMENT_MISMATCH",
+          );
       }
     }
 
@@ -563,16 +498,7 @@ export async function updateUser(req, res, next) {
       }),
     );
 
-    await user.populate([
-      {
-        path: "department",
-        select: "name code isActive",
-      },
-      {
-        path: "manager",
-        select: "name email employeeId designation role",
-      },
-    ]);
+    await user.populate(USER_POPULATE_OPTIONS);
 
     return res.status(200).json({
       success: true,
@@ -580,34 +506,6 @@ export async function updateUser(req, res, next) {
       user,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyPattern || {})[0];
-
-      return res.status(409).json({
-        success: false,
-        message: duplicateField
-          ? `A user with this ${duplicateField} already exists`
-          : "A user with these details already exists",
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      const validationMessages = Object.values(error.errors).map((validationError) => validationError.message);
-
-      return res.status(400).json({
-        success: false,
-        message: validationMessages[0],
-        errors: validationMessages,
-      });
-    }
-
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid value for ${error.path}`,
-      });
-    }
-
     next(error);
   }
 }
@@ -617,56 +515,37 @@ export async function updateUserStatus(req, res, next) {
     const { userId } = req.params;
     const { isActive } = req.body;
 
-    if (!mongoose.isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(userId)) throw new AppError("The provided user ID is invalid.", 400, "INVALID_IDENTIFIER");
 
-    if (typeof isActive !== "boolean") {
-      return res.status(400).json({
-        success: false,
-        message: "isActive must be a boolean value",
-      });
-    }
+    if (typeof isActive !== "boolean")
+      throw new AppError("The isActive parameter must be a valid boolean value (true or false).", 400, "INVALID_BOOLEAN_VALUE");
 
     const user = await User.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    if (!user) throw new AppError("User account not found.", 404, "USER_NOT_FOUND");
 
     if (user.isActive === isActive) {
-      return res.status(400).json({
-        success: false,
-        message: isActive ? "User account is already active" : "User account is already inactive",
-      });
+      const code = req.body.isActive ? "USER_ALREADY_ACTIVE" : "USER_ALREADY_INACTIVE";
+      const message = `The user account is already ${req.body.isActive ? "active" : "inactive"}.`;
+      throw new AppError(message, 400, code);
     }
 
     /*
       Administrator accounts are protected from this endpoint.
     */
-    if (user.role === USER_ROLES.ADMIN) {
-      return res.status(403).json({
-        success: false,
-        message: "Administrator accounts cannot be activated or deactivated through this endpoint",
-      });
-    }
+    if (user.role === USER_ROLES.ADMIN)
+      throw new AppError(
+        "Administrator accounts cannot be activated or deactivated through this endpoint.",
+        403,
+        "ADMIN_STATUS_MODIFICATION_FORBIDDEN",
+      );
 
     /*
       Extra self-protection in case the authorization model
       changes later.
     */
-    if (user._id.toString() === req.user._id.toString()) {
-      return res.status(400).json({
-        success: false,
-        message: "You cannot deactivate your own account",
-      });
-    }
+    if (user._id.toString() === req.user._id.toString())
+      throw new AppError("You cannot deactivate your own account.", 400, "SELF_DEACTIVATION_FORBIDDEN");
 
     if (!isActive) {
       /*
@@ -678,17 +557,14 @@ export async function updateUserStatus(req, res, next) {
         status: LEAVE_STATUSES.PENDING,
       });
 
-      if (pendingLeaveRequest) {
-        return res.status(409).json({
-          success: false,
-          message: "Resolve or cancel the user's pending leave requests before deactivating the account",
-        });
-      }
+      if (pendingLeaveRequest)
+        throw new AppError(
+          "Please resolve or cancel the user's pending leave requests before deactivating their account.",
+          409,
+          "PENDING_LEAVE_REQUESTS_EXIST",
+        );
 
-      /*
-        HR Managers must be removed from organizational
-        dependencies before being deactivated.
-      */
+      // HR Managers must be removed from organizational dependencies before being deactivated.
       if (user.role === USER_ROLES.HR_MANAGER) {
         const [managedDepartment, managedEmployee] = await Promise.all([
           Department.exists({
@@ -701,50 +577,40 @@ export async function updateUserStatus(req, res, next) {
           }),
         ]);
 
-        if (managedDepartment) {
-          return res.status(409).json({
-            success: false,
-            message: "Reassign the departments managed by this user before deactivating the account",
-          });
-        }
+        if (managedDepartment)
+          throw new AppError(
+            "Please reassign all departments managed by this user before deactivating their account.",
+            409,
+            "DEPARTMENTS_REASSIGNMENT_REQUIRED",
+          );
 
-        if (managedEmployee) {
-          return res.status(409).json({
-            success: false,
-            message: "Reassign employees reporting to this user before deactivating the account",
-          });
-        }
+        if (managedEmployee)
+          throw new AppError(
+            "Please reassign all employees reporting to this user before deactivating their account.",
+            409,
+            "EMPLOYEE_REASSIGNMENT_REQUIRED",
+          );
       }
     }
 
-    /*
-      Before reactivation, ensure non-admin users still belong
-      to an active department.
-    */
+    // Before reactivation, ensure non-admin users still belong to an active department.
     if (isActive) {
-      if (!user.department) {
-        return res.status(400).json({
-          success: false,
-          message: "Assign the user to a department before reactivating the account",
-        });
-      }
+      if (!user.department)
+        throw new AppError(
+          "Please assign the user to a department before reactivating their account.",
+          400,
+          "DEPARTMENT_ASSIGNMENT_REQUIRED",
+        );
 
       const activeDepartment = await Department.findOne({
         _id: user.department,
         isActive: true,
       });
 
-      if (!activeDepartment) {
-        return res.status(400).json({
-          success: false,
-          message: "The user's department must be active before reactivating the account",
-        });
-      }
+      if (!activeDepartment)
+        throw new AppError("The user's department must be active before reactivating their account.", 400, "DEPARTMENT_INACTIVE");
 
-      /*
-        If the user has a manager, the manager must still be an
-        active HR Manager in the same department.
-      */
+      // If the user has a manager, the manager must still be an active HR Manager in the same department.
       if (user.manager) {
         const activeManager = await User.findOne({
           _id: user.manager,
@@ -753,12 +619,12 @@ export async function updateUserStatus(req, res, next) {
           isActive: true,
         });
 
-        if (!activeManager) {
-          return res.status(400).json({
-            success: false,
-            message: "Assign a valid active manager before reactivating the account",
-          });
-        }
+        if (!activeManager)
+          throw new AppError(
+            "Please assign a valid, active manager before reactivating the account.",
+            400,
+            "ACTIVE_MANAGER_REQUIRED",
+          );
       }
     }
 
@@ -785,16 +651,7 @@ export async function updateUserStatus(req, res, next) {
         request: req,
       }),
     );
-    await user.populate([
-      {
-        path: "department",
-        select: "name code isActive",
-      },
-      {
-        path: "manager",
-        select: "name email employeeId designation role isActive",
-      },
-    ]);
+    await user.populate(USER_POPULATE_OPTIONS);
 
     return res.status(200).json({
       success: true,

@@ -160,7 +160,6 @@ export async function logout(req, res) {
     if (token) {
       try {
         const decoded = verifyAccessToken(token);
-
         actor = await User.findById(decoded.sub);
       } catch {
         actor = null;
