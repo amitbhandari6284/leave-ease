@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { BadgeCheck, CalendarCheck2, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import { useNavigate } from "react-router";
 
 function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -22,6 +24,7 @@ function LoginPage() {
 
     // Temporary delay to test the loading state.
     await new Promise((resolve) => setTimeout(resolve, 800));
+    navigate("/dashboard");
   }
 
   return (
