@@ -5,6 +5,8 @@ import User from "../users/user.model.js";
 
 import { buildAuditChanges, createAuditLog, runAuditTask } from "../auditLogs/auditLog.service.js";
 
+import { AppError } from "../../utils/AppError.js";
+
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../../constants/audit.js";
 import { USER_ROLES } from "../../constants/roles.js";
 
@@ -13,51 +15,22 @@ async function validateManager(managerId) {
   if (!managerId) {
     return null;
   }
-
-  if (!mongoose.isValidObjectId(managerId)) {
-    const error = new Error("Invalid manager ID");
-    error.statusCode = 400;
-    throw error;
-  }
-
+  if (!mongoose.isValidObjectId(managerId)) throw new AppError("The provided manager ID is invalid.", 400, "INVALID_IDENTIFIER");
   const manager = await User.findById(managerId);
-
-  if (!manager) {
-    const error = new Error("Selected manager does not exist");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  if (!manager.isActive) {
-    const error = new Error("Selected manager account is inactive");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (manager.role !== USER_ROLES.HR_MANAGER) {
-    const error = new Error("Department manager must have the HR_MANAGER role");
-    error.statusCode = 400;
-    throw error;
-  }
-
+  if (!manager) throw new AppError("Selected manager does not exist", 404, "MANAGER_NOT_FOUND");
+  if (!manager.isActive) throw new AppError("Selected manager account is inactive", 400, "INACTIVE_ACCOUNT");
+  if (manager.role !== USER_ROLES.HR_MANAGER)
+    throw new AppError("Department manager must have the HR_MANAGER role", 400, "INVALID_MANAGER_ROLE");
   return manager;
 }
 
 export async function createDepartment(req, res, next) {
   try {
     const { name, code, description = "", manager = null, maximumConcurrentLeaves = 3 } = req.body;
-
-    if (!name || !code) {
-      return res.status(400).json({
-        success: false,
-        message: "Department name and code are required",
-      });
-    }
-
+    if (!name || !code) throw new AppError("Department name and code are required", 400, "MISSING_FIELDS");
     if (manager) {
       await validateManager(manager);
     }
-
     const department = await Department.create({
       name,
       code,
@@ -65,7 +38,6 @@ export async function createDepartment(req, res, next) {
       manager,
       maximumConcurrentLeaves,
     });
-
     await runAuditTask("department-created", () =>
       createAuditLog({
         actor: req.user,
@@ -90,24 +62,13 @@ export async function createDepartment(req, res, next) {
         request: req,
       }),
     );
-
     await department.populate("manager", "name email employeeId role designation");
-
     return res.status(201).json({
       success: true,
       message: "Department created successfully",
       department,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyPattern)[0];
-
-      return res.status(409).json({
-        success: false,
-        message: `A department with this ${duplicateField} already exists`,
-      });
-    }
-
     next(error);
   }
 }
@@ -115,9 +76,7 @@ export async function createDepartment(req, res, next) {
 export async function getDepartments(req, res, next) {
   try {
     const includeInactive = req.query.includeInactive === "true" && req.user.role === USER_ROLES.ADMIN;
-
     const filter = includeInactive ? {} : { isActive: true };
-
     const departments = await Department.find(filter)
       .populate("manager", "name email employeeId role designation")
       .sort({ name: 1 });
@@ -135,23 +94,9 @@ export async function getDepartments(req, res, next) {
 export async function getDepartment(req, res, next) {
   try {
     const { departmentId } = req.params;
-
-    if (!mongoose.isValidObjectId(departmentId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid department ID",
-      });
-    }
-
+    if (!mongoose.isValidObjectId(departmentId)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
     const department = await Department.findById(departmentId).populate("manager", "name email employeeId role designation");
-
-    if (!department) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
-
+    if (!department) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
     return res.status(200).json({
       success: true,
       department,
@@ -164,38 +109,22 @@ export async function getDepartment(req, res, next) {
 export async function updateDepartment(req, res, next) {
   try {
     const { departmentId } = req.params;
-
-    if (!mongoose.isValidObjectId(departmentId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid department ID",
-      });
-    }
-
+    if (!mongoose.isValidObjectId(departmentId)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
     const department = await Department.findById(departmentId);
+    // Bug fix: null-check now happens before .toObject() is called,
+    // instead of after (which crashed on a genuine 404).
+    if (!department) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
     const auditBeforeDepartment = department.toObject();
-
-    if (!department) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
-
     const allowedFields = ["name", "code", "description", "manager", "maximumConcurrentLeaves"];
-
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         department[field] = req.body[field];
       }
     }
-
     if (req.body.manager !== undefined && req.body.manager !== null) {
       await validateManager(req.body.manager);
     }
-
     await department.save();
-
     const departmentChanges = buildAuditChanges(auditBeforeDepartment, department.toObject(), [
       "name",
       "code",
@@ -203,7 +132,6 @@ export async function updateDepartment(req, res, next) {
       "manager",
       "maximumConcurrentLeaves",
     ]);
-
     await runAuditTask("department-updated", () =>
       createAuditLog({
         actor: req.user,
@@ -215,24 +143,13 @@ export async function updateDepartment(req, res, next) {
         request: req,
       }),
     );
-
     await department.populate("manager", "name email employeeId role designation");
-
     return res.status(200).json({
       success: true,
       message: "Department updated successfully",
       department,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyPattern)[0];
-
-      return res.status(409).json({
-        success: false,
-        message: `A department with this ${duplicateField} already exists`,
-      });
-    }
-
     next(error);
   }
 }
@@ -241,38 +158,17 @@ export async function updateDepartmentStatus(req, res, next) {
   try {
     const { departmentId } = req.params;
     const { isActive } = req.body;
-
-    if (!mongoose.isValidObjectId(departmentId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid department ID",
-      });
-    }
-
-    if (typeof isActive !== "boolean") {
-      return res.status(400).json({
-        success: false,
-        message: "isActive must be either true or false",
-      });
-    }
-
+    if (!mongoose.isValidObjectId(departmentId)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
+    if (typeof isActive !== "boolean") throw new AppError("isActive must be either true or false", 400, "INVALID_BOOLEAN_VALUE");
     const department = await Department.findByIdAndUpdate(
       departmentId,
-      {
-        isActive,
-      },
+      { isActive },
       {
         returnDocument: "after",
         runValidators: true,
       },
     ).populate("manager", "name email employeeId role designation");
-
-    if (!department) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
+    if (!department) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
     await runAuditTask("department-status-changed", () =>
       createAuditLog({
         actor: req.user,
@@ -289,7 +185,6 @@ export async function updateDepartmentStatus(req, res, next) {
         request: req,
       }),
     );
-
     return res.status(200).json({
       success: true,
       message: isActive ? "Department activated successfully" : "Department deactivated successfully",

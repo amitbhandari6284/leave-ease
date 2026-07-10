@@ -7,6 +7,7 @@ import LeaveType from "../leaveTypes/leaveType.model.js";
 import { USER_ROLES } from "../../constants/roles.js";
 
 import { LEAVE_STATUSES, LEAVE_STATUS_VALUES } from "../../constants/leaveStatuses.js";
+import { AppError } from "../../utils/AppError.js";
 
 const MONTH_NAMES = [
   "January",
@@ -57,145 +58,116 @@ function createEmptyMonthlyBreakdown() {
   }));
 }
 
+// Independent of department resolution below, so it can run in
+// parallel with it instead of being awaited sequentially.
+async function resolveLeaveTypeFilter(leaveTypeId) {
+  if (!leaveTypeId) {
+    return null;
+  }
+  if (!mongoose.isValidObjectId(leaveTypeId)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
+  const leaveType = await LeaveType.findById(leaveTypeId).select("name code isActive").lean();
+  if (!leaveType) throw new AppError("Leave type not found", 404, "LEAVE_TYPE_NOT_FOUND");
+  return leaveType;
+}
+
+// Encapsulates the role-specific department scoping so it can run
+// concurrently with resolveLeaveTypeFilter above.
+async function resolveDepartmentContext({ role, userId, departmentId }) {
+  if (role === USER_ROLES.HR_MANAGER) {
+    const managedDepartments = await Department.find({
+      manager: userId,
+      isActive: true,
+    })
+      .select("name code maximumConcurrentLeaves")
+      .sort({ name: 1 })
+      .lean();
+    const managedDepartmentIds = managedDepartments.map((managedDepartment) => managedDepartment._id);
+    if (departmentId) {
+      if (!mongoose.isValidObjectId(departmentId)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
+      const managesSelectedDepartment = managedDepartmentIds.some(
+        (managedDepartmentId) => managedDepartmentId.toString() === departmentId,
+      );
+      if (!managesSelectedDepartment) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
+      const selectedDepartment = managedDepartments.find(
+        (managedDepartment) => managedDepartment._id.toString() === departmentId,
+      );
+      return {
+        managedDepartments,
+        selectedDepartment,
+        filterValue: new mongoose.Types.ObjectId(departmentId),
+      };
+    }
+    return {
+      managedDepartments,
+      selectedDepartment: null,
+      filterValue: { $in: managedDepartmentIds },
+    };
+  }
+
+  if (role === USER_ROLES.ADMIN && departmentId) {
+    if (!mongoose.isValidObjectId(departmentId)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
+    const selectedDepartment = await Department.findById(departmentId)
+      .select("name code isActive maximumConcurrentLeaves")
+      .lean();
+    if (!selectedDepartment) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
+    return {
+      managedDepartments: [],
+      selectedDepartment,
+      filterValue: new mongoose.Types.ObjectId(departmentId),
+    };
+  }
+  return {
+    managedDepartments: [],
+    selectedDepartment: null,
+    filterValue: undefined,
+  };
+}
+
 export async function getLeaveSummaryReport(req, res, next) {
   try {
     const { department, leaveType, status } = req.query;
-
     const year = Number(req.query.year ?? getCurrentApplicationYear());
-
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid report year",
-      });
-    }
-
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      throw new AppError("Please provide a valid report year", 400, "INVALID_YEAR");
     const startOfYear = new Date(Date.UTC(year, 0, 1));
-
     const startOfNextYear = new Date(Date.UTC(year + 1, 0, 1));
-
     const filter = {
       startDate: {
         $gte: startOfYear,
         $lt: startOfNextYear,
       },
     };
-
-    let selectedDepartment = null;
-    let selectedLeaveType = null;
-    let managedDepartments = [];
-
     /*
-      Validate the optional status filter.
+      Validate the optional status filter (synchronous, no query
+      needed, so it stays outside the Promise.all below).
     */
     if (status) {
       const normalizedStatus = String(status).trim().toUpperCase();
-
-      if (!LEAVE_STATUS_VALUES.includes(normalizedStatus)) {
-        return res.status(400).json({
-          success: false,
-          message: `Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`,
-        });
-      }
+      if (!LEAVE_STATUS_VALUES.includes(normalizedStatus))
+        throw new AppError(`Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`, 400, "INVALID_STATUS_FILTER");
 
       filter.status = normalizedStatus;
     }
-
     /*
-      Validate the optional leave-type filter.
+      The leave-type lookup and the role-specific department
+      resolution don't depend on each other's results, so they run
+      concurrently instead of one after another.
     */
-    if (leaveType) {
-      if (!mongoose.isValidObjectId(leaveType)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid leave type ID",
-        });
-      }
-
-      selectedLeaveType = await LeaveType.findById(leaveType).select("name code isActive");
-
-      if (!selectedLeaveType) {
-        return res.status(404).json({
-          success: false,
-          message: "Leave type not found",
-        });
-      }
-
+    const [selectedLeaveType, departmentContext] = await Promise.all([
+      resolveLeaveTypeFilter(leaveType),
+      resolveDepartmentContext({
+        role: req.user.role,
+        userId: req.user._id,
+        departmentId: department,
+      }),
+    ]);
+    if (selectedLeaveType) {
       filter.leaveType = new mongoose.Types.ObjectId(leaveType);
     }
-
-    /*
-      HR Managers are automatically restricted to departments
-      assigned to them.
-    */
-    if (req.user.role === USER_ROLES.HR_MANAGER) {
-      managedDepartments = await Department.find({
-        manager: req.user._id,
-        isActive: true,
-      })
-        .select("name code maximumConcurrentLeaves")
-        .sort({
-          name: 1,
-        });
-
-      const managedDepartmentIds = managedDepartments.map((managedDepartment) => managedDepartment._id);
-
-      if (department) {
-        if (!mongoose.isValidObjectId(department)) {
-          return res.status(400).json({
-            success: false,
-            message: "Invalid department ID",
-          });
-        }
-
-        const managesSelectedDepartment = managedDepartmentIds.some(
-          (managedDepartmentId) => managedDepartmentId.toString() === department,
-        );
-
-        if (!managesSelectedDepartment) {
-          return res.status(404).json({
-            success: false,
-            message: "Department not found",
-          });
-        }
-
-        selectedDepartment = managedDepartments.find((managedDepartment) => managedDepartment._id.toString() === department);
-
-        filter.department = new mongoose.Types.ObjectId(department);
-      } else {
-        /*
-          An empty $in array safely produces an empty report for
-          an HR Manager with no assigned departments.
-        */
-        filter.department = {
-          $in: managedDepartmentIds,
-        };
-      }
+    if (departmentContext.filterValue !== undefined) {
+      filter.department = departmentContext.filterValue;
     }
-
-    /*
-      Administrators may optionally filter by one department.
-    */
-    if (req.user.role === USER_ROLES.ADMIN && department) {
-      if (!mongoose.isValidObjectId(department)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid department ID",
-        });
-      }
-
-      selectedDepartment = await Department.findById(department).select("name code isActive maximumConcurrentLeaves");
-
-      if (!selectedDepartment) {
-        return res.status(404).json({
-          success: false,
-          message: "Department not found",
-        });
-      }
-
-      filter.department = new mongoose.Types.ObjectId(department);
-    }
-
+    const { selectedDepartment, managedDepartments } = departmentContext;
     const [overallRows, statusRows, leaveTypeRows, monthlyRows, departmentRows] = await Promise.all([
       /*
         Overall totals.
@@ -207,11 +179,9 @@ export async function getLeaveSummaryReport(req, res, next) {
         {
           $group: {
             _id: null,
-
             requestCount: {
               $sum: 1,
             },
-
             workingDays: {
               $sum: "$workingDays",
             },
@@ -229,11 +199,9 @@ export async function getLeaveSummaryReport(req, res, next) {
         {
           $group: {
             _id: "$status",
-
             requestCount: {
               $sum: 1,
             },
-
             workingDays: {
               $sum: "$workingDays",
             },
@@ -256,15 +224,12 @@ export async function getLeaveSummaryReport(req, res, next) {
         {
           $group: {
             _id: "$leaveType",
-
             requestCount: {
               $sum: 1,
             },
-
             requestedDays: {
               $sum: "$workingDays",
             },
-
             approvedDays: {
               $sum: {
                 $cond: [
@@ -276,7 +241,6 @@ export async function getLeaveSummaryReport(req, res, next) {
                 ],
               },
             },
-
             pendingDays: {
               $sum: {
                 $cond: [
@@ -307,7 +271,6 @@ export async function getLeaveSummaryReport(req, res, next) {
         {
           $project: {
             _id: 0,
-
             leaveType: {
               _id: "$_id",
               name: {
@@ -320,7 +283,6 @@ export async function getLeaveSummaryReport(req, res, next) {
               isPaid: "$leaveType.isPaid",
               isActive: "$leaveType.isActive",
             },
-
             requestCount: 1,
             requestedDays: 1,
             approvedDays: 1,
@@ -346,15 +308,12 @@ export async function getLeaveSummaryReport(req, res, next) {
             _id: {
               $month: "$startDate",
             },
-
             requestCount: {
               $sum: 1,
             },
-
             requestedDays: {
               $sum: "$workingDays",
             },
-
             approvedDays: {
               $sum: {
                 $cond: [
@@ -366,7 +325,6 @@ export async function getLeaveSummaryReport(req, res, next) {
                 ],
               },
             },
-
             pendingDays: {
               $sum: {
                 $cond: [
@@ -378,7 +336,6 @@ export async function getLeaveSummaryReport(req, res, next) {
                 ],
               },
             },
-
             rejectedDays: {
               $sum: {
                 $cond: [
@@ -390,7 +347,6 @@ export async function getLeaveSummaryReport(req, res, next) {
                 ],
               },
             },
-
             cancelledDays: {
               $sum: {
                 $cond: [
@@ -421,15 +377,12 @@ export async function getLeaveSummaryReport(req, res, next) {
         {
           $group: {
             _id: "$department",
-
             requestCount: {
               $sum: 1,
             },
-
             requestedDays: {
               $sum: "$workingDays",
             },
-
             approvedDays: {
               $sum: {
                 $cond: [
@@ -441,7 +394,6 @@ export async function getLeaveSummaryReport(req, res, next) {
                 ],
               },
             },
-
             pendingRequestCount: {
               $sum: {
                 $cond: [
@@ -483,7 +435,6 @@ export async function getLeaveSummaryReport(req, res, next) {
               },
               isActive: "$department.isActive",
             },
-
             requestCount: 1,
             requestedDays: 1,
             approvedDays: 1,
@@ -497,14 +448,11 @@ export async function getLeaveSummaryReport(req, res, next) {
         },
       ]),
     ]);
-
     const overall = overallRows[0] || {
       requestCount: 0,
       workingDays: 0,
     };
-
     const byStatus = createEmptyStatusBreakdown();
-
     for (const statusRow of statusRows) {
       if (Object.hasOwn(byStatus, statusRow._id)) {
         byStatus[statusRow._id] = {
@@ -513,12 +461,9 @@ export async function getLeaveSummaryReport(req, res, next) {
         };
       }
     }
-
     const byMonth = createEmptyMonthlyBreakdown();
-
     for (const monthlyRow of monthlyRows) {
       const monthIndex = monthlyRow._id - 1;
-
       if (monthIndex >= 0 && monthIndex < 12) {
         byMonth[monthIndex] = {
           month: monthlyRow._id,
@@ -532,46 +477,30 @@ export async function getLeaveSummaryReport(req, res, next) {
         };
       }
     }
-
     return res.status(200).json({
       success: true,
       generatedAt: new Date(),
-
       filters: {
         year,
-
         status: status ? String(status).trim().toUpperCase() : null,
-
         department: selectedDepartment || null,
-
         leaveType: selectedLeaveType || null,
-
         scope: req.user.role === USER_ROLES.ADMIN ? "ORGANIZATION" : "MANAGED_DEPARTMENTS",
       },
-
       summary: {
         totalRequests: overall.requestCount,
-
         totalRequestedWorkingDays: overall.workingDays,
-
         approvedRequests: byStatus[LEAVE_STATUSES.APPROVED].requestCount,
-
         approvedWorkingDays: byStatus[LEAVE_STATUSES.APPROVED].workingDays,
-
         pendingRequests: byStatus[LEAVE_STATUSES.PENDING].requestCount,
-
         pendingWorkingDays: byStatus[LEAVE_STATUSES.PENDING].workingDays,
-
         rejectedRequests: byStatus[LEAVE_STATUSES.REJECTED].requestCount,
-
         cancelledRequests: byStatus[LEAVE_STATUSES.CANCELLED].requestCount,
       },
-
       byStatus,
       byMonth,
       byLeaveType: leaveTypeRows,
       byDepartment: departmentRows,
-
       managedDepartments: req.user.role === USER_ROLES.HR_MANAGER ? managedDepartments : undefined,
     });
   } catch (error) {

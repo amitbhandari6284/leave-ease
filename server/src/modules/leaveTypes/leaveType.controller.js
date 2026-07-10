@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 import LeaveType from "./leaveType.model.js";
 import { USER_ROLES } from "../../constants/roles.js";
+import { AppError } from "../../utils/AppError.js";
 
 export async function createLeaveType(req, res, next) {
   try {
@@ -20,33 +21,25 @@ export async function createLeaveType(req, res, next) {
       color = "#4F46E5",
     } = req.body;
 
-    if (!name || !code || yearlyAllowance === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "Name, code and yearly allowance are required",
-      });
-    }
+    if (!name || !code || yearlyAllowance === undefined)
+      throw new AppError("Name, code and yearly allowance are required", 400, "MISSING_FIELDS");
 
-    if (typeof yearlyAllowance !== "number" || yearlyAllowance < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Yearly allowance must be a non-negative number",
-      });
-    }
+    if (typeof yearlyAllowance !== "number" || yearlyAllowance < 0)
+      throw new AppError("Yearly allowance must be a non-negative number", 400, "INVALID_YEARLY_ALLOWANCE");
 
-    if (requiresDocument && documentRequiredAfterDays === null) {
-      return res.status(400).json({
-        success: false,
-        message: "Document required after days must be provided when documents are required",
-      });
-    }
+    if (requiresDocument && documentRequiredAfterDays === null)
+      throw new AppError(
+        "Document required after days must be provided when documents are required",
+        400,
+        "DOCUMENT_THRESHOLD_REQUIRED",
+      );
 
-    if (!requiresDocument && documentRequiredAfterDays !== null) {
-      return res.status(400).json({
-        success: false,
-        message: "Document required after days should be null when documents are not required",
-      });
-    }
+    if (!requiresDocument && documentRequiredAfterDays !== null)
+      throw new AppError(
+        "Document required after days should be null when documents are not required",
+        400,
+        "DOCUMENT_THRESHOLD_NOT_ALLOWED",
+      );
 
     const leaveType = await LeaveType.create({
       name,
@@ -69,25 +62,8 @@ export async function createLeaveType(req, res, next) {
       leaveType,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyValue || error.keyPattern || {})[0] || "field";
-
-      return res.status(409).json({
-        success: false,
-        message: `A leave type with this ${duplicateField} already exists`,
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      const validationMessages = Object.values(error.errors).map((validationError) => validationError.message);
-
-      return res.status(400).json({
-        success: false,
-        message: validationMessages[0],
-        errors: validationMessages,
-      });
-    }
-
+    // Duplicate-key (E11000) and ValidationError are normalized centrally
+    // by errorHandler.js — no need to catch them here.
     next(error);
   }
 }
@@ -120,21 +96,11 @@ export async function updateLeaveType(req, res, next) {
   try {
     const { leaveTypeId } = req.params;
 
-    if (!mongoose.isValidObjectId(leaveTypeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave type ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveTypeId)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
 
     const leaveType = await LeaveType.findById(leaveTypeId);
 
-    if (!leaveType) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave type not found",
-      });
-    }
+    if (!leaveType) throw new AppError("Leave type not found", 404, "LEAVE_TYPE_NOT_FOUND");
 
     const allowedFields = [
       "name",
@@ -168,12 +134,12 @@ export async function updateLeaveType(req, res, next) {
     /*
       If documents are required, a threshold must exist.
     */
-    if (leaveType.requiresDocument === true && leaveType.documentRequiredAfterDays === null) {
-      return res.status(400).json({
-        success: false,
-        message: "Document required after days must be provided when documents are required",
-      });
-    }
+    if (leaveType.requiresDocument === true && leaveType.documentRequiredAfterDays === null)
+      throw new AppError(
+        "Document required after days must be provided when documents are required",
+        400,
+        "DOCUMENT_THRESHOLD_REQUIRED",
+      );
 
     await leaveType.save();
 
@@ -183,25 +149,8 @@ export async function updateLeaveType(req, res, next) {
       leaveType,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyValue || error.keyPattern || {})[0] || "field";
-
-      return res.status(409).json({
-        success: false,
-        message: `A leave type with this ${duplicateField} already exists`,
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      const validationMessages = Object.values(error.errors).map((validationError) => validationError.message);
-
-      return res.status(400).json({
-        success: false,
-        message: validationMessages[0],
-        errors: validationMessages,
-      });
-    }
-
+    // Duplicate-key (E11000) and ValidationError are normalized centrally
+    // by errorHandler.js — no need to catch them here.
     next(error);
   }
 }
@@ -211,28 +160,13 @@ export async function updateLeaveTypeStatus(req, res, next) {
     const { leaveTypeId } = req.params;
     const { isActive } = req.body;
 
-    if (!mongoose.isValidObjectId(leaveTypeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave type ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveTypeId)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
 
-    if (typeof isActive !== "boolean") {
-      return res.status(400).json({
-        success: false,
-        message: "isActive must be either true or false",
-      });
-    }
+    if (typeof isActive !== "boolean") throw new AppError("isActive must be either true or false", 400, "INVALID_BOOLEAN_VALUE");
 
     const leaveType = await LeaveType.findById(leaveTypeId);
 
-    if (!leaveType) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave type not found",
-      });
-    }
+    if (!leaveType) throw new AppError("Leave type not found", 404, "LEAVE_TYPE_NOT_FOUND");
 
     leaveType.isActive = isActive;
 

@@ -20,6 +20,7 @@ import { parseDateOnly } from "../../utils/dateOnly.js";
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../../constants/audit.js";
 import { LEAVE_STATUSES, LEAVE_STATUS_VALUES } from "../../constants/leaveStatuses.js";
 import { USER_ROLES } from "../../constants/roles.js";
+import { AppError } from "../../utils/AppError.js";
 
 function getTodayDateOnly() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -38,15 +39,12 @@ function validateReason(reason) {
   }
 
   const trimmedReason = reason.trim();
-
   if (trimmedReason.length < 10) {
     return "Leave reason must contain at least 10 characters";
   }
-
   if (trimmedReason.length > 500) {
     return "Leave reason cannot exceed 500 characters";
   }
-
   return null;
 }
 
@@ -58,7 +56,6 @@ async function getHolidayDates(startDate, endDate) {
       $lte: endDate,
     },
   }).select("date");
-
   return holidays.map((holiday) => holiday.date);
 }
 
@@ -131,85 +128,74 @@ export async function submitLeaveRequest(req, res, next) {
   try {
     const { leaveType: leaveTypeId, startDate, endDate, reason, attachmentUrl = "" } = req.body;
 
-    if (!req.user.department) {
-      return res.status(400).json({
-        success: false,
-        message: "You must be assigned to a department before applying for leave",
-      });
-    }
+    if (!req.user.department)
+      throw new AppError("You must be assigned to a department before applying for leave", 400, "DEPARTMENT_REQUIRED");
 
-    if (!leaveTypeId || !startDate || !endDate || !reason) {
-      return res.status(400).json({
-        success: false,
-        message: "Leave type, start date, end date and reason are required",
-      });
-    }
+    if (!leaveTypeId || !startDate || !endDate || !reason)
+      throw new AppError("Leave type, start date, end date and reason are required", 400, "MISSING_FIELDS");
 
-    if (!mongoose.isValidObjectId(leaveTypeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave type ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveTypeId)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
 
     const reasonError = validateReason(reason);
 
-    if (reasonError) {
-      return res.status(400).json({
-        success: false,
-        message: reasonError,
-      });
-    }
+    if (reasonError) throw new AppError(reasonError, 400, "INVALID_REASON");
 
     const parsedStartDate = parseDateOnly(startDate);
     const parsedEndDate = parseDateOnly(endDate);
 
-    if (!parsedStartDate || !parsedEndDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Start date and end date must use the YYYY-MM-DD format",
-      });
-    }
+    if (!parsedStartDate || !parsedEndDate)
+      throw new AppError("Start date and end date must use the YYYY-MM-DD format", 400, "INVALID_DATE_FORMAT");
 
-    if (parsedEndDate < parsedStartDate) {
-      return res.status(400).json({
-        success: false,
-        message: "End date cannot be earlier than start date",
-      });
-    }
+    if (parsedEndDate < parsedStartDate)
+      throw new AppError("End date cannot be earlier than start date", 400, "INVALID_DATE_RANGE");
 
     const today = getTodayDateOnly();
 
-    if (parsedStartDate < today) {
-      return res.status(400).json({
-        success: false,
-        message: "Leave cannot be requested for a past date",
-      });
-    }
+    if (parsedStartDate < today) throw new AppError("Leave cannot be requested for a past date", 400, "PAST_DATE_NOT_ALLOWED");
 
     const startYear = parsedStartDate.getUTCFullYear();
     const endYear = parsedEndDate.getUTCFullYear();
 
-    if (startYear !== endYear) {
-      return res.status(400).json({
-        success: false,
-        message: "A leave request cannot span across two calendar years",
-      });
-    }
+    if (startYear !== endYear)
+      throw new AppError("A leave request cannot span across two calendar years", 400, "CROSS_YEAR_REQUEST_NOT_ALLOWED");
 
-    const leaveType = await LeaveType.findOne({
-      _id: leaveTypeId,
-      isActive: true,
-    });
+    /*
+      These three lookups don't depend on each other's results, so
+      they run concurrently instead of one after another.
+    */
+    const [leaveType, holidayDates, overlappingRequest] = await Promise.all([
+      LeaveType.findOne({
+        _id: leaveTypeId,
+        isActive: true,
+      }),
 
-    if (!leaveType) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave type does not exist or is inactive",
-      });
-    }
+      getHolidayDates(parsedStartDate, parsedEndDate),
 
-    const holidayDates = await getHolidayDates(parsedStartDate, parsedEndDate);
+      LeaveRequest.findOne({
+        employee: req.user._id,
+
+        status: {
+          $in: [LEAVE_STATUSES.PENDING, LEAVE_STATUSES.APPROVED],
+        },
+
+        startDate: {
+          $lte: parsedEndDate,
+        },
+
+        endDate: {
+          $gte: parsedStartDate,
+        },
+      }),
+    ]);
+
+    if (!leaveType) throw new AppError("Leave type does not exist or is inactive", 404, "LEAVE_TYPE_NOT_FOUND");
+
+    if (overlappingRequest)
+      throw new AppError(
+        "You already have a pending or approved leave request for overlapping dates",
+        409,
+        "OVERLAPPING_LEAVE_REQUEST",
+      );
 
     const workingDays = calculateWorkingDays({
       startDate: parsedStartDate,
@@ -217,51 +203,24 @@ export async function submitLeaveRequest(req, res, next) {
       holidayDates,
     });
 
-    if (workingDays < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "The selected range does not contain any working days",
-      });
-    }
+    if (workingDays < 1)
+      throw new AppError("The selected range does not contain any working days", 400, "NO_WORKING_DAYS_SELECTED");
 
-    if (workingDays > leaveType.maxConsecutiveDays) {
-      return res.status(400).json({
-        success: false,
-        message: `${leaveType.name} allows a maximum of ${leaveType.maxConsecutiveDays} consecutive working days`,
-      });
-    }
+    if (workingDays > leaveType.maxConsecutiveDays)
+      throw new AppError(
+        `${leaveType.name} allows a maximum of ${leaveType.maxConsecutiveDays} consecutive working days`,
+        400,
+        "MAX_CONSECUTIVE_DAYS_EXCEEDED",
+      );
 
     const documentIsRequired = leaveType.requiresDocument && workingDays >= leaveType.documentRequiredAfterDays;
 
-    if (documentIsRequired && (!attachmentUrl || !attachmentUrl.trim())) {
-      return res.status(400).json({
-        success: false,
-        message: `A supporting document is required for ${leaveType.name} requests of ${leaveType.documentRequiredAfterDays} or more working days`,
-      });
-    }
-
-    const overlappingRequest = await LeaveRequest.findOne({
-      employee: req.user._id,
-
-      status: {
-        $in: [LEAVE_STATUSES.PENDING, LEAVE_STATUSES.APPROVED],
-      },
-
-      startDate: {
-        $lte: parsedEndDate,
-      },
-
-      endDate: {
-        $gte: parsedStartDate,
-      },
-    });
-
-    if (overlappingRequest) {
-      return res.status(409).json({
-        success: false,
-        message: "You already have a pending or approved leave request for overlapping dates",
-      });
-    }
+    if (documentIsRequired && (!attachmentUrl || !attachmentUrl.trim()))
+      throw new AppError(
+        `A supporting document is required for ${leaveType.name} requests of ${leaveType.documentRequiredAfterDays} or more working days`,
+        400,
+        "DOCUMENT_REQUIRED",
+      );
 
     /*
       Paid leave reserves balance while pending.
@@ -284,17 +243,10 @@ export async function submitLeaveRequest(req, res, next) {
           year: startYear,
         });
 
-        if (!existingBalance) {
-          return res.status(400).json({
-            success: false,
-            message: "No leave balance exists for the selected leave type and year",
-          });
-        }
+        if (!existingBalance)
+          throw new AppError("No leave balance exists for the selected leave type and year", 400, "LEAVE_BALANCE_NOT_FOUND");
 
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient ${leaveType.name} balance`,
-        });
+        throw new AppError(`Insufficient ${leaveType.name} balance`, 400, "INSUFFICIENT_LEAVE_BALANCE");
       }
 
       balanceReserved = true;
@@ -392,19 +344,11 @@ export async function getMyLeaveRequests(req, res, next) {
     const parsedPage = Number(page);
     const parsedLimit = Number(limit);
 
-    if (!Number.isInteger(parsedPage) || parsedPage < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Page must be a positive integer",
-      });
-    }
+    if (!Number.isInteger(parsedPage) || parsedPage < 1)
+      throw new AppError("Page must be a positive integer", 400, "INVALID_PAGINATION_PAGE");
 
-    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50) {
-      return res.status(400).json({
-        success: false,
-        message: "Limit must be between 1 and 50",
-      });
-    }
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50)
+      throw new AppError("Limit must be between 1 and 50", 400, "INVALID_PAGINATION_LIMIT");
 
     const filter = {
       employee: req.user._id,
@@ -413,23 +357,14 @@ export async function getMyLeaveRequests(req, res, next) {
     if (status) {
       const normalizedStatus = status.trim().toUpperCase();
 
-      if (!LEAVE_STATUS_VALUES.includes(normalizedStatus)) {
-        return res.status(400).json({
-          success: false,
-          message: `Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`,
-        });
-      }
+      if (!LEAVE_STATUS_VALUES.includes(normalizedStatus))
+        throw new AppError(`Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`, 400, "INVALID_STATUS_FILTER");
 
       filter.status = normalizedStatus;
     }
 
     if (leaveType) {
-      if (!mongoose.isValidObjectId(leaveType)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid leave type ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(leaveType)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
 
       filter.leaveType = leaveType;
     }
@@ -437,12 +372,8 @@ export async function getMyLeaveRequests(req, res, next) {
     if (year !== undefined) {
       const parsedYear = Number(year);
 
-      if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
-        return res.status(400).json({
-          success: false,
-          message: "Please provide a valid year",
-        });
-      }
+      if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100)
+        throw new AppError("Please provide a valid year", 400, "INVALID_YEAR");
 
       filter.startDate = {
         $gte: new Date(Date.UTC(parsedYear, 0, 1)),
@@ -492,28 +423,14 @@ export async function cancelLeaveRequest(req, res, next) {
     const { leaveRequestId } = req.params;
     const { reason = "" } = req.body;
 
-    if (!mongoose.isValidObjectId(leaveRequestId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave request ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveRequestId)) throw new AppError("Invalid leave request ID", 400, "INVALID_IDENTIFIER");
 
-    if (typeof reason !== "string") {
-      return res.status(400).json({
-        success: false,
-        message: "Cancellation reason must be text",
-      });
-    }
+    if (typeof reason !== "string") throw new AppError("Cancellation reason must be text", 400, "INVALID_REASON");
 
     const trimmedReason = reason.trim();
 
-    if (trimmedReason.length > 300) {
-      return res.status(400).json({
-        success: false,
-        message: "Cancellation reason cannot exceed 300 characters",
-      });
-    }
+    if (trimmedReason.length > 300)
+      throw new AppError("Cancellation reason cannot exceed 300 characters", 400, "REASON_TOO_LONG");
 
     /*
       employee condition prevents one employee from cancelling
@@ -524,26 +441,13 @@ export async function cancelLeaveRequest(req, res, next) {
       employee: req.user._id,
     }).populate("leaveType", "name code color isPaid");
 
-    if (!existingRequest) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave request not found",
-      });
-    }
+    if (!existingRequest) throw new AppError("Leave request not found", 404, "LEAVE_REQUEST_NOT_FOUND");
 
-    if (existingRequest.status !== LEAVE_STATUSES.PENDING) {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending leave requests can be cancelled",
-      });
-    }
+    if (existingRequest.status !== LEAVE_STATUSES.PENDING)
+      throw new AppError("Only pending leave requests can be cancelled", 400, "LEAVE_REQUEST_NOT_PENDING");
 
-    if (!existingRequest.leaveType) {
-      const error = new Error("The leave type associated with this request no longer exists");
-
-      error.statusCode = 500;
-      throw error;
-    }
+    if (!existingRequest.leaveType)
+      throw new AppError("The leave type associated with this request no longer exists", 500, "LEAVE_TYPE_MISSING");
 
     const cancelledAt = new Date();
 
@@ -570,12 +474,8 @@ export async function cancelLeaveRequest(req, res, next) {
       },
     );
 
-    if (!cancelledRequest) {
-      return res.status(409).json({
-        success: false,
-        message: "The request status changed before it could be cancelled",
-      });
-    }
+    if (!cancelledRequest)
+      throw new AppError("The request status changed before it could be cancelled", 409, "STATUS_CHANGED_MID_REQUEST");
 
     /*
       Paid leave reserved balance during submission.
@@ -625,10 +525,7 @@ export async function cancelLeaveRequest(req, res, next) {
           },
         );
 
-        const error = new Error("Unable to restore the reserved leave balance");
-
-        error.statusCode = 500;
-        throw error;
+        throw new AppError("Unable to restore the reserved leave balance", 500, "BALANCE_RESTORE_FAILED");
       }
     }
     await runAuditTask("leave-cancelled", () =>
@@ -690,28 +587,16 @@ export async function getReviewQueue(req, res, next) {
     const parsedPage = Number(page);
     const parsedLimit = Number(limit);
 
-    if (!Number.isInteger(parsedPage) || parsedPage < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Page must be a positive integer",
-      });
-    }
+    if (!Number.isInteger(parsedPage) || parsedPage < 1)
+      throw new AppError("Page must be a positive integer", 400, "INVALID_PAGINATION_PAGE");
 
-    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50) {
-      return res.status(400).json({
-        success: false,
-        message: "Limit must be between 1 and 50",
-      });
-    }
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50)
+      throw new AppError("Limit must be between 1 and 50", 400, "INVALID_PAGINATION_LIMIT");
 
     const normalizedStatus = status.trim().toUpperCase();
 
-    if (!LEAVE_STATUS_VALUES.includes(normalizedStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: `Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`,
-      });
-    }
+    if (!LEAVE_STATUS_VALUES.includes(normalizedStatus))
+      throw new AppError(`Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`, 400, "INVALID_STATUS_FILTER");
 
     const filter = {
       status: normalizedStatus,
@@ -727,12 +612,8 @@ export async function getReviewQueue(req, res, next) {
         isActive: true,
       }).select("_id");
 
-      if (managedDepartments.length === 0) {
-        return res.status(403).json({
-          success: false,
-          message: "You are not assigned as the manager of any active department",
-        });
-      }
+      if (managedDepartments.length === 0)
+        throw new AppError("You are not assigned as the manager of any active department", 403, "NO_MANAGED_DEPARTMENTS");
 
       filter.department = {
         $in: managedDepartments.map((managedDepartment) => managedDepartment._id),
@@ -743,32 +624,17 @@ export async function getReviewQueue(req, res, next) {
       Admin can optionally filter by one department.
     */
     if (req.user.role === USER_ROLES.ADMIN && department) {
-      if (!mongoose.isValidObjectId(department)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid department ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(department)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
 
       const selectedDepartment = await Department.findById(department);
 
-      if (!selectedDepartment) {
-        return res.status(404).json({
-          success: false,
-          message: "Department not found",
-        });
-      }
+      if (!selectedDepartment) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
 
       filter.department = department;
     }
 
     if (leaveType) {
-      if (!mongoose.isValidObjectId(leaveType)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid leave type ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(leaveType)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
 
       filter.leaveType = leaveType;
     }
@@ -776,12 +642,8 @@ export async function getReviewQueue(req, res, next) {
     if (year !== undefined) {
       const parsedYear = Number(year);
 
-      if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
-        return res.status(400).json({
-          success: false,
-          message: "Please provide a valid year",
-        });
-      }
+      if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100)
+        throw new AppError("Please provide a valid year", 400, "INVALID_YEAR");
 
       filter.startDate = {
         $gte: new Date(Date.UTC(parsedYear, 0, 1)),
@@ -836,108 +698,50 @@ export async function decideLeaveRequest(req, res, next) {
   try {
     const { leaveRequestId } = req.params;
     const { decision, remark = "" } = req.body;
-
-    if (!mongoose.isValidObjectId(leaveRequestId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave request ID",
-      });
-    }
-
-    if (decision !== LEAVE_STATUSES.APPROVED && decision !== LEAVE_STATUSES.REJECTED) {
-      return res.status(400).json({
-        success: false,
-        message: "Decision must be APPROVED or REJECTED",
-      });
-    }
-
-    if (typeof remark !== "string") {
-      return res.status(400).json({
-        success: false,
-        message: "Decision remark must be text",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveRequestId)) throw new AppError("Invalid leave request ID", 400, "INVALID_IDENTIFIER");
+    if (decision !== LEAVE_STATUSES.APPROVED && decision !== LEAVE_STATUSES.REJECTED)
+      throw new AppError("Decision must be APPROVED or REJECTED", 400, "INVALID_DECISION");
+    if (typeof remark !== "string") throw new AppError("Decision remark must be text", 400, "INVALID_REMARK");
 
     const trimmedRemark = remark.trim();
-
-    if (decision === LEAVE_STATUSES.REJECTED && trimmedRemark.length < 5) {
-      return res.status(400).json({
-        success: false,
-        message: "A rejection remark of at least 5 characters is required",
-      });
-    }
-
-    if (trimmedRemark.length > 500) {
-      return res.status(400).json({
-        success: false,
-        message: "Decision remark cannot exceed 500 characters",
-      });
-    }
-
+    if (decision === LEAVE_STATUSES.REJECTED && trimmedRemark.length < 5)
+      throw new AppError("A rejection remark of at least 5 characters is required", 400, "REMARK_TOO_SHORT");
+    if (trimmedRemark.length > 500) throw new AppError("Decision remark cannot exceed 500 characters", 400, "REMARK_TOO_LONG");
     const existingRequest = await LeaveRequest.findById(leaveRequestId)
       .populate("leaveType", "name code color isPaid")
       .populate("department", "name code manager isActive");
 
-    if (!existingRequest) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave request not found",
-      });
-    }
-
-    if (existingRequest.status !== LEAVE_STATUSES.PENDING) {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending leave requests can be approved or rejected",
-      });
-    }
-
-    if (!existingRequest.leaveType) {
-      const error = new Error("The leave type associated with this request no longer exists");
-
-      error.statusCode = 500;
-      throw error;
-    }
-
-    if (!existingRequest.department) {
-      const error = new Error("The department associated with this request no longer exists");
-
-      error.statusCode = 500;
-      throw error;
-    }
+    if (!existingRequest) throw new AppError("Leave request not found", 404, "LEAVE_REQUEST_NOT_FOUND");
+    if (existingRequest.status !== LEAVE_STATUSES.PENDING)
+      throw new AppError("Only pending leave requests can be approved or rejected", 400, "LEAVE_REQUEST_NOT_PENDING");
+    if (!existingRequest.leaveType)
+      throw new AppError("The leave type associated with this request no longer exists", 500, "LEAVE_TYPE_MISSING");
+    if (!existingRequest.department)
+      throw new AppError("The department associated with this request no longer exists", 500, "DEPARTMENT_MISSING");
 
     /*
       HR Managers may only decide requests from departments
       assigned to them.
+
+      "department" was already populated above with "manager" and
+      "isActive", so this is an in-memory check instead of a
+      redundant Department.exists query.
     */
     if (req.user.role === USER_ROLES.HR_MANAGER) {
-      const managesDepartment = await Department.exists({
-        _id: existingRequest.department._id,
-        manager: req.user._id,
-        isActive: true,
-      });
-
-      if (!managesDepartment) {
-        return res.status(403).json({
-          success: false,
-          message: "You are not authorized to review requests from this department",
-        });
-      }
+      const managesDepartment =
+        existingRequest.department.isActive && existingRequest.department.manager?.toString() === req.user._id.toString();
+      if (!managesDepartment)
+        throw new AppError("You are not authorized to review requests from this department", 403, "DEPARTMENT_NOT_MANAGED");
     }
 
     /*
       An HR Manager may also submit their own leave request,
       but they must not approve or reject it themselves.
     */
-    if (existingRequest.employee.toString() === req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "You cannot approve or reject your own leave request",
-      });
-    }
+    if (existingRequest.employee.toString() === req.user._id.toString())
+      throw new AppError("You cannot approve or reject your own leave request", 403, "SELF_DECISION_FORBIDDEN");
 
     const decidedAt = new Date();
-
     /*
       The status condition prevents two managers from deciding
       the same request simultaneously.
@@ -960,14 +764,8 @@ export async function decideLeaveRequest(req, res, next) {
         runValidators: true,
       },
     );
-
-    if (!decidedRequest) {
-      return res.status(409).json({
-        success: false,
-        message: "The request status changed before your decision could be saved",
-      });
-    }
-
+    if (!decidedRequest)
+      throw new AppError("The request status changed before your decision could be saved", 409, "STATUS_CHANGED_MID_REQUEST");
     let updatedBalance = null;
 
     /*
@@ -976,7 +774,6 @@ export async function decideLeaveRequest(req, res, next) {
     */
     if (existingRequest.leaveType.isPaid) {
       const balanceYear = existingRequest.startDate.getUTCFullYear();
-
       const balanceUpdate =
         decision === LEAVE_STATUSES.APPROVED
           ? {
@@ -990,7 +787,6 @@ export async function decideLeaveRequest(req, res, next) {
                 pending: -existingRequest.workingDays,
               },
             };
-
       updatedBalance = await LeaveBalance.findOneAndUpdate(
         {
           user: existingRequest.employee,
@@ -1007,7 +803,6 @@ export async function decideLeaveRequest(req, res, next) {
           runValidators: true,
         },
       );
-
       if (!updatedBalance) {
         /*
           Restore the leave request to PENDING if its balance
@@ -1029,15 +824,11 @@ export async function decideLeaveRequest(req, res, next) {
           },
         );
 
-        const error = new Error("Unable to update the employee leave balance");
-
-        error.statusCode = 500;
-        throw error;
+        throw new AppError("Unable to update the employee leave balance", 500, "BALANCE_UPDATE_FAILED");
       }
     }
 
     const auditAction = decision === LEAVE_STATUSES.APPROVED ? AUDIT_ACTIONS.LEAVE_APPROVED : AUDIT_ACTIONS.LEAVE_REJECTED;
-
     await runAuditTask("leave-decision", () =>
       createAuditLog({
         actor: req.user,
@@ -1082,7 +873,6 @@ export async function decideLeaveRequest(req, res, next) {
         select: "name email employeeId role designation",
       },
     ]);
-
     await runNotificationTask("leave-decision", () =>
       notifyLeaveDecision({
         leaveRequest: decidedRequest,
@@ -1104,13 +894,7 @@ export async function decideLeaveRequest(req, res, next) {
 export async function getLeaveRequest(req, res, next) {
   try {
     const { leaveRequestId } = req.params;
-
-    if (!mongoose.isValidObjectId(leaveRequestId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave request ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveRequestId)) throw new AppError("Invalid leave request ID", 400, "INVALID_IDENTIFIER");
 
     const leaveRequest = await LeaveRequest.findById(leaveRequestId)
       .populate(
@@ -1133,49 +917,31 @@ export async function getLeaveRequest(req, res, next) {
         ].join(" "),
       )
       .populate("decidedBy", "name email employeeId role designation");
-
-    if (!leaveRequest) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave request not found",
-      });
-    }
+    if (!leaveRequest) throw new AppError("Leave request not found", 404, "LEAVE_REQUEST_NOT_FOUND");
 
     const currentUserId = req.user._id.toString();
-
     const employeeId = leaveRequest.employee?._id?.toString();
-
     const isOwnRequest = employeeId === currentUserId;
 
     /*
       Employees may only view their own requests.
     */
-    if (req.user.role === USER_ROLES.EMPLOYEE && !isOwnRequest) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave request not found",
-      });
-    }
+    if (req.user.role === USER_ROLES.EMPLOYEE && !isOwnRequest)
+      throw new AppError("Leave request not found", 404, "LEAVE_REQUEST_NOT_FOUND");
 
     /*
       HR Managers may view:
       1. Their own leave requests
       2. Requests from departments they manage
+
+      "department" is already populated with "manager" above, so
+      this is an in-memory comparison instead of a redundant
+      Department.exists query.
     */
     if (req.user.role === USER_ROLES.HR_MANAGER && !isOwnRequest) {
-      const managesDepartment = await Department.exists({
-        _id: leaveRequest.department._id,
-        manager: req.user._id,
-      });
-
-      if (!managesDepartment) {
-        return res.status(404).json({
-          success: false,
-          message: "Leave request not found",
-        });
-      }
+      const managesDepartment = leaveRequest.department?.manager?.toString() === req.user._id.toString();
+      if (!managesDepartment) throw new AppError("Leave request not found", 404, "LEAVE_REQUEST_NOT_FOUND");
     }
-
     return res.status(200).json({
       success: true,
       leaveRequest,
