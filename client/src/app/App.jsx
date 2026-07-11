@@ -5,6 +5,7 @@ import LoginPage from "../pages/auth/LoginPage";
 import AppLayout from "../components/layout/AppLayout";
 import EmployeeDashboard from "../pages/employee/EmployeeDashboard";
 import ApplyLeavePage from "../pages/employee/ApplyLeavePage";
+import MyLeavesPage from "../pages/employee/MyLeavesPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,8 +27,8 @@ function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<EmployeeDashboard />} />
             <Route path="/apply-leave" element={<ApplyLeavePage />} />
+            <Route path="/my-leaves" element={<MyLeavesPage />} />
             {/*
-            <Route path="/my-leaves" element={< />} />
           <Route path="/calendar" element={<PlaceholderPage />} />
           <Route path="/pending-requests" element={<PlaceholderPage />} />
           <Route path="/users" element={<PlaceholderPage />} />
