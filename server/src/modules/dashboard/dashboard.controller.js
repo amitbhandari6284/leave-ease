@@ -9,6 +9,7 @@ import User from "../users/user.model.js";
 import { LEAVE_STATUSES, LEAVE_STATUS_VALUES } from "../../constants/leaveStatuses.js";
 
 import { USER_ROLES, USER_ROLE_VALUES } from "../../constants/roles.js";
+import { AppError } from "../../utils/AppError.js";
 
 function getApplicationToday() {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -139,6 +140,30 @@ async function getUpcomingHolidays(today) {
     .limit(5);
 }
 
+/*
+  Shared by both the HR and Admin dashboards, which previously
+  duplicated this exact populate/sort/limit shape with only the
+  department scoping differing. Passing an already-built
+  additionalFilter keeps both call sites in sync going forward.
+*/
+async function getUpcomingApprovedLeave(today, additionalFilter = {}, limit = 10) {
+  return LeaveRequest.find({
+    ...additionalFilter,
+    status: LEAVE_STATUSES.APPROVED,
+
+    endDate: {
+      $gte: today,
+    },
+  })
+    .populate("employee", "name employeeId designation avatarUrl")
+    .populate("department", "name code")
+    .populate("leaveType", "name code color")
+    .sort({
+      startDate: 1,
+    })
+    .limit(limit);
+}
+
 async function getEmployeeDashboard({ user, year, today, startOfYear, startOfNextYear }) {
   const [balanceData, requestCounts, upcomingLeave, unreadNotificationCount, upcomingHolidays] = await Promise.all([
     getUserBalanceSummary(user._id, year),
@@ -261,24 +286,7 @@ async function getHrDashboard({ user, year, today, startOfYear, startOfNextYear 
 
     getLeaveStatusCounts(requestFilter),
 
-    LeaveRequest.find({
-      department: {
-        $in: departmentIds,
-      },
-
-      status: LEAVE_STATUSES.APPROVED,
-
-      endDate: {
-        $gte: today,
-      },
-    })
-      .populate("employee", "name employeeId designation avatarUrl")
-      .populate("department", "name code")
-      .populate("leaveType", "name code color")
-      .sort({
-        startDate: 1,
-      })
-      .limit(10),
+    getUpcomingApprovedLeave(today, { department: { $in: departmentIds } }),
 
     getUserBalanceSummary(user._id, year),
 
@@ -370,20 +378,7 @@ async function getAdminDashboard({ user, year, today, startOfYear, startOfNextYe
       },
     }),
 
-    LeaveRequest.find({
-      status: LEAVE_STATUSES.APPROVED,
-
-      endDate: {
-        $gte: today,
-      },
-    })
-      .populate("employee", "name employeeId designation avatarUrl")
-      .populate("department", "name code")
-      .populate("leaveType", "name code color")
-      .sort({
-        startDate: 1,
-      })
-      .limit(10),
+    getUpcomingApprovedLeave(today, {}),
 
     Notification.countDocuments({
       recipient: user._id,
@@ -425,12 +420,8 @@ export async function getDashboardSummary(req, res, next) {
 
     const year = Number(requestedYear);
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid dashboard year",
-      });
-    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      throw new AppError("Please provide a valid dashboard year", 400, "INVALID_YEAR");
 
     const { startOfYear, startOfNextYear } = getYearRange(year);
 
@@ -451,10 +442,7 @@ export async function getDashboardSummary(req, res, next) {
     } else if (req.user.role === USER_ROLES.ADMIN) {
       dashboard = await getAdminDashboard(dashboardArguments);
     } else {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to access a dashboard",
-      });
+      throw new AppError("You do not have permission to access a dashboard", 403, "DASHBOARD_ACCESS_FORBIDDEN");
     }
 
     return res.status(200).json({

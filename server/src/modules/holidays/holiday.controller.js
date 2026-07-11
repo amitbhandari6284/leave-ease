@@ -6,6 +6,7 @@ import { buildAuditChanges, createAuditLog, runAuditTask } from "../auditLogs/au
 
 import { USER_ROLES } from "../../constants/roles.js";
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../../constants/audit.js";
+import { AppError } from "../../utils/AppError.js";
 
 const EDITABLE_HOLIDAY_FIELDS = ["name", "date", "type", "description"];
 
@@ -17,21 +18,11 @@ export async function createHoliday(req, res, next) {
   try {
     const { name, date, type = "PUBLIC", description = "" } = req.body;
 
-    if (!name || !date) {
-      return res.status(400).json({
-        success: false,
-        message: "Holiday name and date are required",
-      });
-    }
+    if (!name || !date) throw new AppError("Holiday name and date are required", 400, "MISSING_FIELDS");
 
     const parsedDate = parseDateOnly(date);
 
-    if (!parsedDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Holiday date must be a valid date in YYYY-MM-DD format",
-      });
-    }
+    if (!parsedDate) throw new AppError("Holiday date must be a valid date in YYYY-MM-DD format", 400, "INVALID_DATE_FORMAT");
 
     const holiday = await Holiday.create({
       name,
@@ -71,23 +62,8 @@ export async function createHoliday(req, res, next) {
       holiday,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "A holiday already exists on the selected date",
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      const validationMessages = Object.values(error.errors).map((validationError) => validationError.message);
-
-      return res.status(400).json({
-        success: false,
-        message: validationMessages[0],
-        errors: validationMessages,
-      });
-    }
-
+    // Duplicate-key (E11000) and ValidationError are normalized centrally
+    // by errorHandler.js — no need to catch them here.
     next(error);
   }
 }
@@ -98,12 +74,8 @@ export async function getHolidays(req, res, next) {
 
     const year = requestedYear ? Number(requestedYear) : new Date().getUTCFullYear();
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid holiday year",
-      });
-    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      throw new AppError("Please provide a valid holiday year", 400, "INVALID_YEAR");
 
     const includeInactive = req.query.includeInactive === "true" && req.user.role === USER_ROLES.ADMIN;
 
@@ -141,48 +113,27 @@ export async function updateHoliday(req, res, next) {
   try {
     const { holidayId } = req.params;
 
-    if (!mongoose.isValidObjectId(holidayId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid holiday ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(holidayId)) throw new AppError("Invalid holiday ID", 400, "INVALID_IDENTIFIER");
 
-    if (hasOwn(req.body, "isActive")) {
-      return res.status(400).json({
-        success: false,
-        message: "isActive cannot be updated through this endpoint",
-      });
-    }
+    if (hasOwn(req.body, "isActive"))
+      throw new AppError("isActive cannot be updated through this endpoint", 400, "RESTRICTED_FIELD_UPDATE");
 
     const providedFields = EDITABLE_HOLIDAY_FIELDS.filter((field) => hasOwn(req.body, field));
 
-    if (providedFields.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No editable holiday fields were provided",
-      });
-    }
+    if (providedFields.length === 0) throw new AppError("No editable holiday fields were provided", 400, "MISSING_UPDATE_DATA");
 
     const holiday = await Holiday.findById(holidayId);
-    const auditBeforeHoliday = holiday.toObject();
 
-    if (!holiday) {
-      return res.status(404).json({
-        success: false,
-        message: "Holiday not found",
-      });
-    }
+    // Bug fix: null-check now happens before .toObject() is called,
+    // instead of after (which crashed on a genuine 404).
+    if (!holiday) throw new AppError("Holiday not found", 404, "HOLIDAY_NOT_FOUND");
+
+    const auditBeforeHoliday = holiday.toObject();
 
     if (hasOwn(req.body, "date")) {
       const parsedDate = parseDateOnly(req.body.date);
 
-      if (!parsedDate) {
-        return res.status(400).json({
-          success: false,
-          message: "Holiday date must be a valid date in YYYY-MM-DD format",
-        });
-      }
+      if (!parsedDate) throw new AppError("Holiday date must be a valid date in YYYY-MM-DD format", 400, "INVALID_DATE_FORMAT");
 
       holiday.date = parsedDate;
     }
@@ -221,23 +172,8 @@ export async function updateHoliday(req, res, next) {
       holiday,
     });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "A holiday already exists on the selected date",
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      const validationMessages = Object.values(error.errors).map((validationError) => validationError.message);
-
-      return res.status(400).json({
-        success: false,
-        message: validationMessages[0],
-        errors: validationMessages,
-      });
-    }
-
+    // Duplicate-key (E11000) and ValidationError are normalized centrally
+    // by errorHandler.js — no need to catch them here.
     next(error);
   }
 }
@@ -247,35 +183,20 @@ export async function updateHolidayStatus(req, res, next) {
     const { holidayId } = req.params;
     const { isActive } = req.body;
 
-    if (!mongoose.isValidObjectId(holidayId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid holiday ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(holidayId)) throw new AppError("Invalid holiday ID", 400, "INVALID_IDENTIFIER");
 
-    if (typeof isActive !== "boolean") {
-      return res.status(400).json({
-        success: false,
-        message: "isActive must be a boolean value",
-      });
-    }
+    if (typeof isActive !== "boolean") throw new AppError("isActive must be a boolean value", 400, "INVALID_BOOLEAN_VALUE");
 
     const holiday = await Holiday.findById(holidayId);
 
-    if (!holiday) {
-      return res.status(404).json({
-        success: false,
-        message: "Holiday not found",
-      });
-    }
+    if (!holiday) throw new AppError("Holiday not found", 404, "HOLIDAY_NOT_FOUND");
 
-    if (holiday.isActive === isActive) {
-      return res.status(400).json({
-        success: false,
-        message: isActive ? "Holiday is already active" : "Holiday is already inactive",
-      });
-    }
+    if (holiday.isActive === isActive)
+      throw new AppError(
+        isActive ? "Holiday is already active" : "Holiday is already inactive",
+        400,
+        isActive ? "HOLIDAY_ALREADY_ACTIVE" : "HOLIDAY_ALREADY_INACTIVE",
+      );
 
     holiday.isActive = isActive;
 

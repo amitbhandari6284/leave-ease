@@ -57,32 +57,41 @@ export async function login(req, res, next) {
 
     const token = signAccessToken(user._id);
     const loginTime = new Date();
-    await User.updateOne(
-      {
-        _id: user._id,
-      },
-      {
-        $set: {
-          lastLoginAt: loginTime,
-        },
-      },
-    );
+
     user.lastLoginAt = loginTime;
     res.cookie("accessToken", token, getAuthCookieOptions());
 
-    await runAuditTask("login-success", () =>
-      createAuditLog({
-        actor: user,
-        action: AUDIT_ACTIONS.LOGIN_SUCCESS,
-        entityType: AUDIT_ENTITY_TYPES.AUTH,
-        entityId: user._id,
-        description: "User logged in successfully.",
-        metadata: {
-          email: user.email,
+    /*
+      The lastLoginAt write and the audit log write are independent
+      of each other, so they run concurrently instead of one after
+      another.
+    */
+    await Promise.all([
+      User.updateOne(
+        {
+          _id: user._id,
         },
-        request: req,
-      }),
-    );
+        {
+          $set: {
+            lastLoginAt: loginTime,
+          },
+        },
+      ),
+
+      runAuditTask("login-success", () =>
+        createAuditLog({
+          actor: user,
+          action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+          entityType: AUDIT_ENTITY_TYPES.AUTH,
+          entityId: user._id,
+          description: "User logged in successfully.",
+          metadata: {
+            email: user.email,
+          },
+          request: req,
+        }),
+      ),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -152,14 +161,18 @@ export async function changePassword(req, res, next) {
   }
 }
 
-export async function logout(req, res) {
+export async function logout(req, res, next) {
   try {
     let actor = null;
     const token = req.cookies?.accessToken;
 
     if (token) {
       try {
-        const decoded = verifyAccessToken(token);
+        // Bug fix: verifyAccessToken is async and was being called
+        // without await, so `decoded` was a pending Promise and
+        // `decoded.sub` was always undefined — actor lookup silently
+        // failed on every logout instead of resolving the user.
+        const decoded = await verifyAccessToken(token);
         actor = await User.findById(decoded.sub);
       } catch {
         actor = null;
@@ -187,7 +200,7 @@ export async function logout(req, res) {
   }
 }
 
-export function getCurrentUser(req, res) {
+export function getCurrentUser(req, res, next) {
   try {
     return res.status(200).json({
       success: true,

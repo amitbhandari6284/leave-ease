@@ -7,6 +7,7 @@ import Holiday from "../holidays/holiday.model.js";
 import { USER_ROLES } from "../../constants/roles.js";
 import { LEAVE_STATUSES } from "../../constants/leaveStatuses.js";
 import { formatDateOnly } from "../../utils/dateOnly.js";
+import { AppError } from "../../utils/AppError.js";
 
 function getCurrentApplicationYearMonth() {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -41,12 +42,7 @@ export async function getDepartmentLeaveCalendar(req, res, next) {
   try {
     const { departmentId } = req.params;
 
-    if (!mongoose.isValidObjectId(departmentId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid department ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(departmentId)) throw new AppError("Invalid department ID", 400, "INVALID_IDENTIFIER");
 
     const currentDate = getCurrentApplicationYearMonth();
 
@@ -54,30 +50,17 @@ export async function getDepartmentLeaveCalendar(req, res, next) {
 
     const month = req.query.month === undefined ? currentDate.month : Number(req.query.month);
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid calendar year",
-      });
-    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      throw new AppError("Please provide a valid calendar year", 400, "INVALID_YEAR");
 
-    if (!Number.isInteger(month) || month < 1 || month > 12) {
-      return res.status(400).json({
-        success: false,
-        message: "Calendar month must be between 1 and 12",
-      });
-    }
+    if (!Number.isInteger(month) || month < 1 || month > 12)
+      throw new AppError("Calendar month must be between 1 and 12", 400, "INVALID_MONTH");
 
     const department = await Department.findById(departmentId).select(
       ["name", "code", "manager", "maximumConcurrentLeaves", "isActive"].join(" "),
     );
 
-    if (!department) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
+    if (!department) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
 
     const currentUserDepartmentId = req.user.department?.toString();
 
@@ -86,12 +69,8 @@ export async function getDepartmentLeaveCalendar(req, res, next) {
     /*
       Employees may only see their own department.
     */
-    if (req.user.role === USER_ROLES.EMPLOYEE && !isOwnDepartment) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
+    if (req.user.role === USER_ROLES.EMPLOYEE && !isOwnDepartment)
+      throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
 
     /*
       HR Managers may see:
@@ -101,23 +80,14 @@ export async function getDepartmentLeaveCalendar(req, res, next) {
     if (req.user.role === USER_ROLES.HR_MANAGER) {
       const isDepartmentManager = department.manager?.toString() === req.user._id.toString();
 
-      if (!isOwnDepartment && !isDepartmentManager) {
-        return res.status(404).json({
-          success: false,
-          message: "Department not found",
-        });
-      }
+      if (!isOwnDepartment && !isDepartmentManager) throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
     }
 
     /*
       Inactive departments are visible only to Admin.
     */
-    if (!department.isActive && req.user.role !== USER_ROLES.ADMIN) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
+    if (!department.isActive && req.user.role !== USER_ROLES.ADMIN)
+      throw new AppError("Department not found", 404, "DEPARTMENT_NOT_FOUND");
 
     const monthStart = new Date(Date.UTC(year, month - 1, 1));
 
@@ -147,8 +117,7 @@ export async function getDepartmentLeaveCalendar(req, res, next) {
         .populate("leaveType", "name code color isPaid")
         .sort({
           startDate: 1,
-        })
-        .lean(),
+        }),
 
       Holiday.find({
         isActive: true,
@@ -161,8 +130,7 @@ export async function getDepartmentLeaveCalendar(req, res, next) {
         .select("name date type description")
         .sort({
           date: 1,
-        })
-        .lean(),
+        }),
     ]);
 
     const holidayDateKeys = new Set(holidays.map((holiday) => formatDateOnly(holiday.date)));

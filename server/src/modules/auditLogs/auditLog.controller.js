@@ -5,6 +5,7 @@ import AuditLog from "./auditLog.model.js";
 import { AUDIT_ACTION_VALUES, AUDIT_ENTITY_TYPE_VALUES } from "../../constants/audit.js";
 
 import { parseDateOnly } from "../../utils/dateOnly.js";
+import { AppError } from "../../utils/AppError.js";
 
 export async function getAuditLogs(req, res, next) {
   try {
@@ -13,29 +14,16 @@ export async function getAuditLogs(req, res, next) {
     const parsedPage = Number(page);
     const parsedLimit = Number(limit);
 
-    if (!Number.isInteger(parsedPage) || parsedPage < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Page must be a positive integer",
-      });
-    }
+    if (!Number.isInteger(parsedPage) || parsedPage < 1)
+      throw new AppError("Page must be a positive integer", 400, "INVALID_PAGINATION_PAGE");
 
-    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-      return res.status(400).json({
-        success: false,
-        message: "Limit must be between 1 and 100",
-      });
-    }
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100)
+      throw new AppError("Limit must be between 1 and 100", 400, "INVALID_PAGINATION_LIMIT");
 
     const filter = {};
 
     if (actor) {
-      if (!mongoose.isValidObjectId(actor)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid actor user ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(actor)) throw new AppError("Invalid actor user ID", 400, "INVALID_IDENTIFIER");
 
       filter.actor = actor;
     }
@@ -45,12 +33,8 @@ export async function getAuditLogs(req, res, next) {
     if (action) {
       normalizedAction = String(action).trim().toUpperCase();
 
-      if (!AUDIT_ACTION_VALUES.includes(normalizedAction)) {
-        return res.status(400).json({
-          success: false,
-          message: `Action must be one of: ${AUDIT_ACTION_VALUES.join(", ")}`,
-        });
-      }
+      if (!AUDIT_ACTION_VALUES.includes(normalizedAction))
+        throw new AppError(`Action must be one of: ${AUDIT_ACTION_VALUES.join(", ")}`, 400, "INVALID_ACTION_FILTER");
 
       filter.action = normalizedAction;
     }
@@ -60,34 +44,25 @@ export async function getAuditLogs(req, res, next) {
     if (entityType) {
       normalizedEntityType = String(entityType).trim().toUpperCase();
 
-      if (!AUDIT_ENTITY_TYPE_VALUES.includes(normalizedEntityType)) {
-        return res.status(400).json({
-          success: false,
-          message: `Entity type must be one of: ${AUDIT_ENTITY_TYPE_VALUES.join(", ")}`,
-        });
-      }
+      if (!AUDIT_ENTITY_TYPE_VALUES.includes(normalizedEntityType))
+        throw new AppError(
+          `Entity type must be one of: ${AUDIT_ENTITY_TYPE_VALUES.join(", ")}`,
+          400,
+          "INVALID_ENTITY_TYPE_FILTER",
+        );
 
       filter.entityType = normalizedEntityType;
     }
 
     if (entityId) {
-      if (!mongoose.isValidObjectId(entityId)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid entity ID",
-        });
-      }
+      if (!mongoose.isValidObjectId(entityId)) throw new AppError("Invalid entity ID", 400, "INVALID_IDENTIFIER");
 
       filter.entityId = entityId;
     }
 
     if (success !== undefined) {
-      if (success !== "true" && success !== "false") {
-        return res.status(400).json({
-          success: false,
-          message: "success must be true or false",
-        });
-      }
+      if (success !== "true" && success !== "false")
+        throw new AppError("success must be true or false", 400, "INVALID_BOOLEAN_VALUE");
 
       filter.success = success === "true";
     }
@@ -99,12 +74,7 @@ export async function getAuditLogs(req, res, next) {
     if (startDate) {
       const parsedStartDate = parseDateOnly(startDate);
 
-      if (!parsedStartDate) {
-        return res.status(400).json({
-          success: false,
-          message: "startDate must use the YYYY-MM-DD format",
-        });
-      }
+      if (!parsedStartDate) throw new AppError("startDate must use the YYYY-MM-DD format", 400, "INVALID_DATE_FORMAT");
 
       filter.createdAt.$gte = parsedStartDate;
     }
@@ -112,12 +82,7 @@ export async function getAuditLogs(req, res, next) {
     if (endDate) {
       const parsedEndDate = parseDateOnly(endDate);
 
-      if (!parsedEndDate) {
-        return res.status(400).json({
-          success: false,
-          message: "endDate must use the YYYY-MM-DD format",
-        });
-      }
+      if (!parsedEndDate) throw new AppError("endDate must use the YYYY-MM-DD format", 400, "INVALID_DATE_FORMAT");
 
       /*
         Use the start of the following date so the provided
@@ -130,12 +95,8 @@ export async function getAuditLogs(req, res, next) {
       filter.createdAt.$lt = endDateExclusive;
     }
 
-    if (filter.createdAt?.$gte && filter.createdAt?.$lt && filter.createdAt.$lt <= filter.createdAt.$gte) {
-      return res.status(400).json({
-        success: false,
-        message: "endDate cannot be earlier than startDate",
-      });
-    }
+    if (filter.createdAt?.$gte && filter.createdAt?.$lt && filter.createdAt.$lt <= filter.createdAt.$gte)
+      throw new AppError("endDate cannot be earlier than startDate", 400, "INVALID_DATE_RANGE");
 
     const skip = (parsedPage - 1) * parsedLimit;
 

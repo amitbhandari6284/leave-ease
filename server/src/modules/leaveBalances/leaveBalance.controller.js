@@ -10,6 +10,7 @@ import { createAuditLog, runAuditTask } from "../auditLogs/auditLog.service.js";
 
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../../constants/audit.js";
 import { USER_ROLES } from "../../constants/roles.js";
+import { AppError } from "../../utils/AppError.js";
 
 function getCurrentApplicationYear() {
   const formattedYear = new Intl.DateTimeFormat("en-US", {
@@ -25,12 +26,8 @@ export async function getMyLeaveBalances(req, res, next) {
     const requestedYear = req.query.year;
     const year = requestedYear ? Number(requestedYear) : new Date().getFullYear();
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid balance year",
-      });
-    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      throw new AppError("Please provide a valid balance year", 400, "INVALID_YEAR");
 
     const balances = await LeaveBalance.find({
       user: req.user._id,
@@ -61,37 +58,19 @@ export async function getUserLeaveBalances(req, res, next) {
 
     const year = Number(requestedYear);
 
-    if (!mongoose.isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(userId)) throw new AppError("Invalid user ID", 400, "INVALID_IDENTIFIER");
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid balance year",
-      });
-    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      throw new AppError("Please provide a valid balance year", 400, "INVALID_YEAR");
 
     const targetUser = await User.findById(userId).select(
       ["name", "email", "employeeId", "role", "department", "manager", "designation", "avatarUrl", "isActive"].join(" "),
     );
 
-    if (!targetUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    if (!targetUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
-    if (targetUser.role === USER_ROLES.ADMIN) {
-      return res.status(400).json({
-        success: false,
-        message: "Administrator accounts do not have leave balances",
-      });
-    }
+    if (targetUser.role === USER_ROLES.ADMIN)
+      throw new AppError("Administrator accounts do not have leave balances", 400, "ADMIN_HAS_NO_BALANCE");
 
     /*
       HR Managers can view:
@@ -102,12 +81,7 @@ export async function getUserLeaveBalances(req, res, next) {
       const isOwnBalance = targetUser._id.toString() === req.user._id.toString();
 
       if (!isOwnBalance) {
-        if (!targetUser.department) {
-          return res.status(404).json({
-            success: false,
-            message: "User not found",
-          });
-        }
+        if (!targetUser.department) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
         const managesDepartment = await Department.exists({
           _id: targetUser.department,
@@ -115,26 +89,38 @@ export async function getUserLeaveBalances(req, res, next) {
           isActive: true,
         });
 
-        if (!managesDepartment) {
-          /*
-            Return 404 rather than revealing that a user outside
-            the HR Manager's scope exists.
-          */
-          return res.status(404).json({
-            success: false,
-            message: "User not found",
-          });
-        }
+        /*
+          Return 404 rather than revealing that a user outside
+          the HR Manager's scope exists.
+        */
+        if (!managesDepartment) throw new AppError("User not found", 404, "USER_NOT_FOUND");
       }
     }
 
-    const balances = await LeaveBalance.find({
-      user: targetUser._id,
-      year,
-    }).populate(
-      "leaveType",
-      ["name", "code", "description", "color", "yearlyAllowance", "isPaid", "allowHalfDay", "isActive"].join(" "),
-    );
+    /*
+      Balance lookup and department/manager population for the
+      response don't depend on each other, so they run concurrently.
+    */
+    const [balances] = await Promise.all([
+      LeaveBalance.find({
+        user: targetUser._id,
+        year,
+      }).populate(
+        "leaveType",
+        ["name", "code", "description", "color", "yearlyAllowance", "isPaid", "allowHalfDay", "isActive"].join(" "),
+      ),
+
+      targetUser.populate([
+        {
+          path: "department",
+          select: "name code isActive",
+        },
+        {
+          path: "manager",
+          select: "name email employeeId designation role isActive",
+        },
+      ]),
+    ]);
 
     balances.sort((firstBalance, secondBalance) => {
       const firstName = firstBalance.leaveType?.name || "";
@@ -165,17 +151,6 @@ export async function getUserLeaveBalances(req, res, next) {
       },
     );
 
-    await targetUser.populate([
-      {
-        path: "department",
-        select: "name code isActive",
-      },
-      {
-        path: "manager",
-        select: "name email employeeId designation role isActive",
-      },
-    ]);
-
     return res.status(200).json({
       success: true,
       year,
@@ -198,140 +173,72 @@ export async function adjustUserLeaveBalance(req, res, next) {
 
     const { leaveType: leaveTypeId, year = getCurrentApplicationYear(), amount, reason } = req.body;
 
-    if (!mongoose.isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(userId)) throw new AppError("Invalid user ID", 400, "INVALID_IDENTIFIER");
 
-    if (!mongoose.isValidObjectId(leaveTypeId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid leave type ID",
-      });
-    }
+    if (!mongoose.isValidObjectId(leaveTypeId)) throw new AppError("Invalid leave type ID", 400, "INVALID_IDENTIFIER");
 
     const parsedYear = Number(year);
 
-    if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid balance year",
-      });
-    }
+    if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100)
+      throw new AppError("Please provide a valid balance year", 400, "INVALID_YEAR");
 
-    if (typeof amount !== "number" || !Number.isFinite(amount)) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment amount must be a number",
-      });
-    }
+    if (typeof amount !== "number" || !Number.isFinite(amount))
+      throw new AppError("Adjustment amount must be a number", 400, "INVALID_AMOUNT");
 
-    if (amount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment amount cannot be zero",
-      });
-    }
+    if (amount === 0) throw new AppError("Adjustment amount cannot be zero", 400, "ZERO_AMOUNT_NOT_ALLOWED");
 
     /*
       Allow complete days and half days:
       1, 2, -1, 0.5, -1.5
     */
-    if (!Number.isInteger(amount * 2)) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment amount must use whole-day or half-day increments",
-      });
-    }
+    if (!Number.isInteger(amount * 2))
+      throw new AppError("Adjustment amount must use whole-day or half-day increments", 400, "INVALID_AMOUNT_INCREMENT");
 
-    if (Math.abs(amount) > 365) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment amount cannot exceed 365 days",
-      });
-    }
+    if (Math.abs(amount) > 365) throw new AppError("Adjustment amount cannot exceed 365 days", 400, "AMOUNT_OUT_OF_RANGE");
 
-    if (typeof reason !== "string" || reason.trim().length < 10) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment reason must contain at least 10 characters",
-      });
-    }
+    if (typeof reason !== "string" || reason.trim().length < 10)
+      throw new AppError("Adjustment reason must contain at least 10 characters", 400, "REASON_TOO_SHORT");
 
     const trimmedReason = reason.trim();
 
-    if (trimmedReason.length > 500) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment reason cannot exceed 500 characters",
-      });
-    }
+    if (trimmedReason.length > 500) throw new AppError("Adjustment reason cannot exceed 500 characters", 400, "REASON_TOO_LONG");
 
     const targetUser = await User.findById(userId).select("name email employeeId role department designation isActive");
 
-    if (!targetUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    if (!targetUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
-    if (targetUser.role === USER_ROLES.ADMIN) {
-      return res.status(400).json({
-        success: false,
-        message: "Administrator accounts do not have leave balances",
-      });
-    }
+    if (targetUser.role === USER_ROLES.ADMIN)
+      throw new AppError("Administrator accounts do not have leave balances", 400, "ADMIN_HAS_NO_BALANCE");
 
     if (req.user.role === USER_ROLES.HR_MANAGER) {
       // HR Managers cannot adjust their own balances.
-      if (targetUser._id.toString() === req.user._id.toString()) {
-        return res.status(403).json({
-          success: false,
-          message: "HR Managers cannot adjust their own leave balance",
-        });
-      }
+      if (targetUser._id.toString() === req.user._id.toString())
+        throw new AppError("HR Managers cannot adjust their own leave balance", 403, "SELF_ADJUSTMENT_FORBIDDEN");
 
       /*
-    For the MVP, HR Managers may adjust only Employee
-    balances—not other HR Manager balances.
-  */
-      if (targetUser.role !== USER_ROLES.EMPLOYEE) {
-        return res.status(403).json({
-          success: false,
-          message: "HR Managers can adjust only employee leave balances",
-        });
-      }
+        For the MVP, HR Managers may adjust only Employee
+        balances—not other HR Manager balances.
+      */
+      if (targetUser.role !== USER_ROLES.EMPLOYEE)
+        throw new AppError("HR Managers can adjust only employee leave balances", 403, "NON_EMPLOYEE_ADJUSTMENT_FORBIDDEN");
 
-      if (!targetUser.department) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
+      if (!targetUser.department) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
       /*
-    Confirm that the HR Manager manages the employee's
-    active department.
-  */
+        Confirm that the HR Manager manages the employee's
+        active department.
+      */
       const managesDepartment = await Department.exists({
         _id: targetUser.department,
         manager: req.user._id,
         isActive: true,
       });
 
-      if (!managesDepartment) {
-        /*
-      Use 404 so HR Managers cannot confirm the existence
-      of employees outside their permitted scope.
-    */
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
+      /*
+        Use 404 so HR Managers cannot confirm the existence
+        of employees outside their permitted scope.
+      */
+      if (!managesDepartment) throw new AppError("User not found", 404, "USER_NOT_FOUND");
     }
 
     /*
@@ -380,17 +287,10 @@ export async function adjustUserLeaveBalance(req, res, next) {
         year: parsedYear,
       });
 
-      if (!existingBalance) {
-        return res.status(404).json({
-          success: false,
-          message: "No leave balance exists for this user, leave type and year",
-        });
-      }
+      if (!existingBalance)
+        throw new AppError("No leave balance exists for this user, leave type and year", 404, "LEAVE_BALANCE_NOT_FOUND");
 
-      return res.status(400).json({
-        success: false,
-        message: "This deduction would make the available balance negative",
-      });
+      throw new AppError("This deduction would make the available balance negative", 400, "NEGATIVE_BALANCE_NOT_ALLOWED");
     }
 
     appliedAmount = amount;
@@ -441,17 +341,23 @@ export async function adjustUserLeaveBalance(req, res, next) {
       throw error;
     }
 
-    await updatedBalance.populate("leaveType", ["name", "code", "color", "yearlyAllowance", "isPaid", "isActive"].join(" "));
+    /*
+      Balance repopulation and adjustment-record population don't
+      depend on each other, so they run concurrently.
+    */
+    await Promise.all([
+      updatedBalance.populate("leaveType", ["name", "code", "color", "yearlyAllowance", "isPaid", "isActive"].join(" ")),
 
-    await adjustmentRecord.populate([
-      {
-        path: "adjustedBy",
-        select: "name email employeeId role designation",
-      },
-      {
-        path: "leaveType",
-        select: "name code color",
-      },
+      adjustmentRecord.populate([
+        {
+          path: "adjustedBy",
+          select: "name email employeeId role designation",
+        },
+        {
+          path: "leaveType",
+          select: "name code color",
+        },
+      ]),
     ]);
 
     await runNotificationTask("balance-adjusted", () =>
@@ -534,16 +440,8 @@ export async function adjustUserLeaveBalance(req, res, next) {
       }
     }
 
-    if (error.name === "ValidationError") {
-      const validationMessages = Object.values(error.errors).map((validationError) => validationError.message);
-
-      return res.status(400).json({
-        success: false,
-        message: validationMessages[0],
-        errors: validationMessages,
-      });
-    }
-
+    // ValidationError is normalized centrally by errorHandler.js —
+    // no need to catch it here.
     next(error);
   }
 }
