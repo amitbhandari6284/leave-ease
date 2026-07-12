@@ -1,6 +1,8 @@
 import { BadgeIndianRupee, CalendarOff, CirclePlus, EllipsisVertical, Stethoscope, Plane } from "lucide-react";
 import { Link } from "react-router";
 
+import StatusBadge from "../../components/leave/history/StatusBadge";
+
 const leaveBalances = [
   {
     name: "Casual Leave",
@@ -233,15 +235,15 @@ function RecentApplications() {
   );
 }
 
-function StatusBadge({ status }) {
-  const statusClass =
-    status === "Approved"
-      ? "bg-green-100 text-green-700"
-      : status === "Pending"
-        ? "bg-orange-100 text-orange-700"
-        : "bg-red-100 text-red-700";
+// function StatusBadge({ status }) {
+//   const statusClass =
+//     status === "Approved"
+//       ? "bg-green-100 text-green-700"
+//       : status === "Pending"
+//         ? "bg-orange-100 text-orange-700"
+//         : "bg-red-100 text-red-700";
 
-  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusClass}`}>{status}</span>;
-}
+//   return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusClass}`}>{status}</span>;
+// }
 
 export default EmployeeDashboard;

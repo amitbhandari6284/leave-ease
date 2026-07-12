@@ -6,6 +6,7 @@ import AppLayout from "../components/layout/AppLayout";
 import EmployeeDashboard from "../pages/employee/EmployeeDashboard";
 import ApplyLeavePage from "../pages/employee/ApplyLeavePage";
 import MyLeavesPage from "../pages/employee/MyLeavesPage";
+import HrDashboard from "../pages/hr/HrDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,13 +29,16 @@ function App() {
             <Route path="/dashboard" element={<EmployeeDashboard />} />
             <Route path="/apply-leave" element={<ApplyLeavePage />} />
             <Route path="/my-leaves" element={<MyLeavesPage />} />
+            <Route path="/hr/dashboard" element={<HrDashboard />} />
+
             {/*
-          <Route path="/calendar" element={<PlaceholderPage />} />
-          <Route path="/pending-requests" element={<PlaceholderPage />} />
-          <Route path="/users" element={<PlaceholderPage />} />
-          <Route path="/policies" element={<PlaceholderPage />} />
-          <Route path="/reports" element={<PlaceholderPage />} />
-          */}
+            <Route path="/review-request/:requestId" element={<PlaceholderPage />} />
+            <Route path="/calendar" element={<PlaceholderPage />} />
+            <Route path="/pending-requests" element={<PlaceholderPage />} />
+            <Route path="/users" element={<PlaceholderPage />} />
+            <Route path="/policies" element={<PlaceholderPage />} />
+            <Route path="/reports" element={<PlaceholderPage />} />
+            */}
           </Route>
         </Routes>
       </BrowserRouter>

@@ -34,6 +34,14 @@ const employeeLinks = [
     to: "/calendar",
     icon: CalendarDays,
   },
+];
+
+const hrLinks = [
+  {
+    label: "HR Dashboard",
+    to: "/hr/dashboard",
+    icon: LayoutDashboard,
+  },
   {
     label: "Pending Requests",
     to: "/pending-requests",
@@ -97,6 +105,14 @@ function Sidebar({ isOpen, onClose }) {
       <nav className="mt-6 flex-1 overflow-y-auto px-2">
         <div className="space-y-1">
           {employeeLinks.map((link) => (
+            <SidebarLink key={link.to} link={link} onClick={onClose} />
+          ))}
+        </div>
+
+        <p className="mt-8 px-4 text-xs font-medium tracking-wider text-slate-500">HR</p>
+
+        <div className="mt-4 space-y-1">
+          {hrLinks.map((link) => (
             <SidebarLink key={link.to} link={link} onClick={onClose} />
           ))}
         </div>

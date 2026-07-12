@@ -6,6 +6,8 @@ import ApplicationTable from "../../components/leave/history/ApplicationTable";
 import EmptyState from "../../components/leave/history/EmptyState";
 import Pagination from "../../components/leave/history/Pagination";
 
+import { escapeCsvValue } from "../../utils/helper";
+
 const PAGE_SIZE = 3;
 
 const DEFAULT_FILTERS = {
@@ -318,14 +320,6 @@ function MyLeavesPage() {
       </section>
     </div>
   );
-}
-
-function escapeCsvValue(value) {
-  const stringValue = String(value ?? "");
-  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
-    return `"${stringValue.replaceAll('"', '""')}"`;
-  }
-  return stringValue;
 }
 
 const filterInputClass =

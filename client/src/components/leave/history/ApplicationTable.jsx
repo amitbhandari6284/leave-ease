@@ -1,6 +1,6 @@
 import { EllipsisVertical } from "lucide-react";
 
-import { formatDate } from "../../../utils/employeeHelper";
+import { formatDate } from "../../../utils/helper";
 
 import LeaveTypeDisplay from "./LeaveTypeDisplay";
 import StatusBadge from "./StatusBadge";
