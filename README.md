@@ -148,7 +148,6 @@ COOKIE_SAME_SITE=lax
 COOKIE_SECURE=false
 ```
 
-Don't commit the real `.env` — obviously.
 
 Sanity-check your config before starting anything:
 
