@@ -1,9 +1,9 @@
 import { CircleCheck, CircleX, Clock3, Download, Umbrella } from "lucide-react";
 
-import AvailabilityCard from "../../components/leave/manager/AvailabilityCard";
-import MiniCalendar from "../../components/leave/manager/MiniCalendar";
-import PendingRequests from "../../components/leave/manager/PendingRequests";
-import StatCard from "../../components/leave/manager/StatCard";
+import AvailabilityCard from "../../features/leave-review/components/AvailabilityCard";
+import MiniCalendar from "../../features/leave-review/components/MiniCalendar";
+import PendingRequests from "../../features/leave-review/components/PendingRequests";
+import StatCard from "../../features/leave-review/components/StatCard";
 
 import { escapeCsvValue } from "../../utils/helper";
 

@@ -38,7 +38,7 @@ function RequestCard({ request }) {
       </dl>
 
       <Link
-        to={`/review-request/${request.id}`}
+        to={`/pending-requests/${request.id}`}
         className="mt-5 flex h-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700"
       >
         Review Request

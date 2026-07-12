@@ -32,7 +32,7 @@ function RequestTable({ request }) {
 
       <td className="px-6 py-5 text-right">
         <Link
-          to={`/review-request/${request.id}`}
+          to={`/pending-requests/${request.id}`}
           className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
         >
           Review
