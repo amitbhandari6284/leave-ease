@@ -3,10 +3,10 @@ import { useForm } from "react-hook-form";
 import { CheckCircle2, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
 import { calculateWorkingDays, getTodayInputValue } from "../../utils/calculateWorkingDays";
-import FormField from "../../components/leave/FormField";
-import BalanceImpactCard from "../../components/leave/BalanceImpactCard";
-import SelectedFile from "../../components/leave/SelectedFile";
-import TeamAvailabilityCard from "../../components/leave/TeamAvailabilityCard";
+import FormField from "../../features/leave-apply/components/FormField";
+import BalanceImpactCard from "../../features/leave-apply/components/BalanceImpactCard";
+import SelectedFile from "../../features/leave-apply/components/SelectedFile";
+import TeamAvailabilityCard from "../../features/leave-apply/components/TeamAvailabilityCard";
 
 const leaveTypes = [
   {

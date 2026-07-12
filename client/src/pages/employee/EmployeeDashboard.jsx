@@ -1,7 +1,7 @@
 import { BadgeIndianRupee, CalendarOff, CirclePlus, EllipsisVertical, Stethoscope, Plane } from "lucide-react";
 import { Link } from "react-router";
 
-import StatusBadge from "../../components/leave/history/StatusBadge";
+import StatusBadge from "../../features/leave-history/components/StatusBadge";
 
 const leaveBalances = [
   {

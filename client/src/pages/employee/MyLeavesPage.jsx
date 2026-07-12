@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { Download, Search } from "lucide-react";
 
-import ApplicationCard from "../../components/leave/history/ApplicationCard";
-import ApplicationTable from "../../components/leave/history/ApplicationTable";
-import EmptyState from "../../components/leave/history/EmptyState";
-import Pagination from "../../components/leave/history/Pagination";
+import ApplicationCard from "../../features/leave-history/components/ApplicationCard";
+import ApplicationTable from "../../features/leave-history/components/ApplicationTable";
+import EmptyState from "../../features/leave-history/components/EmptyState";
+import Pagination from "../../features/leave-history/components/Pagination";
 
 import { escapeCsvValue } from "../../utils/helper";
 
