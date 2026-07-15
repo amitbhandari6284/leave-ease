@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { ArrowUpRight } from "lucide-react";
 
-import EmployeeDisplay from "./EmployeeDisplay";
+import EmployeeDisplay from "../../leave-review/components/EmployeeDisplay";
 import LeaveTypeBadge from "./LeaveTypeBadge";
 
 import { formatDate } from "../../../utils/helper";

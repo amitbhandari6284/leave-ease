@@ -1,10 +1,14 @@
 import { ListFilter } from "lucide-react";
 import { Link } from "react-router";
 
-import RequestTable from "./RequestTable";
-import RequestCard from "./RequestCard";
+import EmployeeDisplay from "./Employee.jsx";
+import LeaveTypeBadge from "./LeaveTypeBadge.jsx";
 
-function PendingRequests({ pendingRequests, dashboardStats }) {
+import { formatDate } from "../../../utils/helper";
+import RequestTable from "./RequestTable.jsx";
+
+
+export default function PendingRequests({ pendingRequests, dashboardStats }) {
   return (
     <section className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
       <header className="flex items-start justify-between gap-4 border-b border-violet-200 px-6 py-5">
@@ -20,7 +24,7 @@ function PendingRequests({ pendingRequests, dashboardStats }) {
       </header>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[720px] border-collapse text-left">
+        <table className="w-full min-w-180 border-collapse text-left">
           <thead>
             <tr className="border-b border-violet-200 bg-violet-50 text-xs uppercase tracking-wide text-slate-600">
               <th className="px-6 py-4 font-semibold">Employee</th>
@@ -53,4 +57,47 @@ function PendingRequests({ pendingRequests, dashboardStats }) {
   );
 }
 
-export default PendingRequests;
+
+
+function RequestCard({ request }) {
+  return (
+    <article className="p-5">
+      <div className="flex items-start justify-between gap-4">
+        <EmployeeDisplay request={request} />
+        <LeaveTypeBadge type={request.leaveType} />
+      </div>
+
+      <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <dt className="text-slate-500">Duration</dt>
+          <dd className="mt-1 font-semibold text-slate-900">
+            {formatDate(request.startDate)} – {formatDate(request.endDate)}
+          </dd>
+        </div>
+
+        <div>
+          <dt className="text-slate-500">Days</dt>
+          <dd className="mt-1 font-semibold text-slate-900">{request.days}</dd>
+        </div>
+
+        <div>
+          <dt className="text-slate-500">Submitted</dt>
+          <dd className="mt-1 font-semibold text-slate-900">{formatDate(request.submittedOn)}</dd>
+        </div>
+
+        <div>
+          <dt className="text-slate-500">Document</dt>
+          <dd className="mt-1 font-semibold text-slate-900">{request.hasDocument ? "Attached" : "None"}</dd>
+        </div>
+      </dl>
+
+      <Link
+        to={`/pending-requests/${request.id}`}
+        className="mt-5 flex h-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700"
+      >
+        Review Request
+      </Link>
+    </article>
+  );
+}
+

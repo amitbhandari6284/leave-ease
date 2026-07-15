@@ -2,7 +2,7 @@ import { CircleCheck, CircleX, Clock3, Download, Umbrella } from "lucide-react";
 
 import AvailabilityCard from "../../features/leave-review/components/AvailabilityCard";
 import MiniCalendar from "../../features/leave-review/components/MiniCalendar";
-import PendingRequests from "../../features/leave-review/components/PendingRequests";
+import PendingRequests from "../../features/pending-request/components/PendingRequests.jsx";
 import StatCard from "../../features/leave-review/components/StatCard";
 
 import { escapeCsvValue } from "../../utils/helper";

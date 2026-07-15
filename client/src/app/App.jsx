@@ -7,6 +7,7 @@ import EmployeeDashboard from "../pages/employee/EmployeeDashboard";
 import ApplyLeavePage from "../pages/employee/ApplyLeavePage";
 import MyLeavesPage from "../pages/employee/MyLeavesPage";
 import HrDashboard from "../pages/hr/HrDashboard";
+import PendingRequestsPage from "../pages/hr/PendingRequestsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,8 @@ function App() {
             <Route path="/apply-leave" element={<ApplyLeavePage />} />
             <Route path="/my-leaves" element={<MyLeavesPage />} />
             <Route path="/hr/dashboard" element={<HrDashboard />} />
+            <Route path="/pending-requests" element={<PendingRequestsPage />} />
+            <Route path="/pending-requests/:requestId" element={<PendingRequestsPage />} />
 
             {/*
             <Route path="/review-request/:requestId" element={<PlaceholderPage />} />
