@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import EmployeeDisplay from "./Employee.jsx";
 import LeaveTypeBadge from "./LeaveTypeBadge.jsx";
 
-import { formatDate } from "../../../utils/helper";
+import { formatDate } from "../../../lib/helper.js";
 import RequestTable from "./RequestTable.jsx";
 
 

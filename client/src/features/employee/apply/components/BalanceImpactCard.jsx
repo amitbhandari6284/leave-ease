@@ -1,6 +1,6 @@
 import { WalletCards } from "lucide-react";
 
-function BalanceImpactCard({ selectedLeaveType, workingDays, balanceAfterRequest, balancePercentage }) {
+export default function BalanceImpactCard({ selectedLeaveType, workingDays, balanceAfterRequest, balancePercentage }) {
   const hasLimitedBalance = selectedLeaveType?.currentBalance != null;
 
   return (
@@ -39,4 +39,3 @@ function BalanceImpactCard({ selectedLeaveType, workingDays, balanceAfterRequest
   );
 }
 
-export default BalanceImpactCard;

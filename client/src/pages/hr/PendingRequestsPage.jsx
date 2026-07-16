@@ -3,11 +3,11 @@ import { AlertTriangle, Clock3, Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
 import { initialPendingRequests } from "../../data/hrRequests";
-import RequestRow from "../../features/pending-request/components/RequestRow";
-import RequestCard from "../../features/pending-request/components/RequestCard";
-import ReviewRequestDrawer from "../../features/pending-request/components/ReviewRequestDrawer";
-import SummaryCard from "../../features/pending-request/components/SummaryCard";
-import EmptyState from "../../features/leave-history/components/EmptyState";
+import RequestRow from "../../features/hr/components/RequestRow.jsx";
+import RequestCard from "../../features/hr/components/RequestCard.jsx";
+import ReviewRequestDrawer from "../../features/hr/components/ReviewRequestDrawer.jsx";
+import SummaryCard from "../../features/hr/components/SummaryCard.jsx";
+import EmptyState from "../../components/ui/EmptyState.jsx";
 
 function PendingRequestsPage() {
   const { requestId } = useParams();
@@ -203,7 +203,8 @@ function PendingRequestsPage() {
           ))}
         </div>
 
-        {filteredRequests.length === 0 && <EmptyState />}
+        {filteredRequests.length === 0 && <EmptyState title="No pending requests found"
+          message="Try changing the selected filters." />}
       </section>
 
       <ReviewRequestDrawer request={selectedRequest} onClose={closeDrawer} onApprove={approveRequest} onReject={rejectRequest} />

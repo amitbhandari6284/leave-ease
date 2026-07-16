@@ -1,11 +1,11 @@
 import { CircleCheck, CircleX, Clock3, Download, Umbrella } from "lucide-react";
 
-import AvailabilityCard from "../../features/leave-review/components/AvailabilityCard";
-import MiniCalendar from "../../features/leave-review/components/MiniCalendar";
-import PendingRequests from "../../features/pending-request/components/PendingRequests.jsx";
-import StatCard from "../../features/leave-review/components/StatCard";
+import AvailabilityCard from "../../features/hr/components/AvailabilityCard.jsx";
+import MiniCalendar from "../../features/hr/components/MiniCalendar.jsx";
+import PendingRequests from "../../features/hr/components/PendingRequests.jsx";
+import StatCard from "../../features/hr/components/StatCard.jsx";
 
-import { escapeCsvValue } from "../../utils/helper";
+import { escapeCsvValue } from "../../lib/helper.js";
 
 const dashboardStats = [
   {

@@ -1,7 +1,7 @@
 import LeaveTypeDisplay from "./LeaveTypeDisplay";
 import StatusBadge from "./StatusBadge";
 
-import { formatDate } from "../../../utils/helper";
+import { formatDate } from "../../../../lib/helper.js";
 
 function ApplicationCard({ application, onCancel }) {
   return (

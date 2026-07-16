@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Download, Search } from "lucide-react";
 
-import ApplicationCard from "../../features/leave-history/components/ApplicationCard";
-import ApplicationTable from "../../features/leave-history/components/ApplicationTable";
-import EmptyState from "../../features/leave-history/components/EmptyState";
-import Pagination from "../../features/leave-history/components/Pagination";
+import ApplicationCard from "../../features/employee/history/components/ApplicationCard.jsx";
+import ApplicationTable from "../../features/employee/history/components/ApplicationTable.jsx";
+import EmptyState from "../../components/ui/EmptyState.jsx";
+import Pagination from "../../features/employee/history/components/Pagination.jsx";
 
-import { escapeCsvValue } from "../../utils/helper";
+import { escapeCsvValue } from "../../lib/helper.js";
 
 const PAGE_SIZE = 3;
 
@@ -157,7 +157,7 @@ function MyLeavesPage() {
     setMessage("The pending leave request has been cancelled.");
   }
 
-  function clearFilters() {
+  function handleClearFilters() {
     setFilters(DEFAULT_FILTERS);
   }
 
@@ -271,7 +271,7 @@ function MyLeavesPage() {
           <button
             type="button"
             className="h-11 rounded-lg px-3 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50 xl:col-span-1"
-            onClick={clearFilters}
+            onClick={handleClearFilters}
           >
             Clear
           </button>
@@ -308,7 +308,8 @@ function MyLeavesPage() {
             <ApplicationCard key={application.id} application={application} onCancel={() => cancelApplication(application.id)} />
           ))}
         </div>
-        {filteredApplications.length === 0 && <EmptyState onClearFilters={clearFilters} />}
+        {filteredApplications.length === 0 && <EmptyState title="No leave applications found"
+          message="Try changing or clearing the selected filters." onClearFilters={handleClearFilters} />}
         {filteredApplications.length > 0 && (
           <footer className="flex flex-col gap-4 border-t border-violet-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-600">

@@ -1,6 +1,6 @@
 import { EllipsisVertical } from "lucide-react";
 
-import { formatDate } from "../../../utils/helper";
+import { formatDate } from "../../../../lib/helper.js";
 
 import LeaveTypeDisplay from "./LeaveTypeDisplay";
 import StatusBadge from "./StatusBadge";
@@ -37,9 +37,8 @@ function ApplicationTable({ application, isMenuOpen, onToggleMenu, onCancel, ope
 
         {isMenuOpen && (
           <div
-            className={`absolute right-6 z-20 w-40 rounded-lg border border-violet-200 bg-white p-1 text-left shadow-lg ${
-              openUpward ? "bottom-14" : "top-14"
-            }`}
+            className={`absolute right-6 z-20 w-40 rounded-lg border border-violet-200 bg-white p-1 text-left shadow-lg ${openUpward ? "bottom-14" : "top-14"
+              }`}
           >
             <button type="button" className="w-full rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
               View details

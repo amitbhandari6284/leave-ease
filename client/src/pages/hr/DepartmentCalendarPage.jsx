@@ -6,7 +6,7 @@ import {
 
 import DayDetailsDrawer from "../../features/calendar/components/DayDetailsDrawer";
 import { CalendarCell } from "../../features/calendar/components/CalendarCell";
-import { buildCalendarDays, parseInputDate } from "../../features/calendar/utils/helper.js";
+import { buildCalendarDays, parseInputDate } from "../../features/calendar/utils/calendarHelpers.js";
 
 
 const filterClass =

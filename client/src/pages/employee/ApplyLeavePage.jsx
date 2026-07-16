@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { CheckCircle2, Upload } from "lucide-react";
 import { useNavigate } from "react-router";
-import { calculateWorkingDays, getTodayInputValue } from "../../utils/calculateWorkingDays";
-import FormField from "../../features/leave-apply/components/FormField";
-import BalanceImpactCard from "../../features/leave-apply/components/BalanceImpactCard";
-import SelectedFile from "../../features/leave-apply/components/SelectedFile";
-import TeamAvailabilityCard from "../../features/leave-apply/components/TeamAvailabilityCard";
+import { CheckCircle2, Upload } from "lucide-react";
+
+import FormField from "../../features/employee/apply/components/FormField.jsx";
+import BalanceImpactCard from "../../features/employee/apply/components/BalanceImpactCard.jsx";
+import SelectedFile from "../../features/employee/apply/components/SelectedFile.jsx";
+import TeamAvailabilityCard from "../../features/employee/apply/components/TeamAvailabilityCard.jsx";
+
+import { calculateWorkingDays, getTodayInputValue } from "../../lib/calculateWorkingDays.js";
 
 const leaveTypes = [
   {
@@ -323,9 +325,8 @@ function ApplyLeavePage() {
 }
 
 function getInputClass(hasError) {
-  return `h-12 w-full rounded-lg border bg-violet-50/40 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${
-    hasError ? "border-red-500" : "border-violet-200"
-  }`;
+  return `h-12 w-full rounded-lg border bg-violet-50/40 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${hasError ? "border-red-500" : "border-violet-200"
+    }`;
 }
 
 export default ApplyLeavePage;

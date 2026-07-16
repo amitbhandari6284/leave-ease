@@ -1,7 +1,7 @@
 import { BadgeIndianRupee, CalendarOff, CirclePlus, EllipsisVertical, Stethoscope, Plane } from "lucide-react";
 import { Link } from "react-router";
 
-import StatusBadge from "../../features/leave-history/components/StatusBadge";
+import StatusBadge from "../../features/employee/history/components/StatusBadge.jsx";
 
 const leaveBalances = [
   {
@@ -160,7 +160,7 @@ function RecentApplications() {
       </header>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[760px] border-collapse text-left">
+        <table className="w-full min-w-190 border-collapse text-left">
           <thead>
             <tr className="border-b border-violet-200 text-xs font-medium text-slate-600">
               <th className="px-6 py-4">Type</th>

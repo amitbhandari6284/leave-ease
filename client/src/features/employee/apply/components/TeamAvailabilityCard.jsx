@@ -1,6 +1,6 @@
 import { Info, Users } from "lucide-react";
 
-function TeamAvailabilityCard({ startDate, endDate, workingDays }) {
+export default function TeamAvailabilityCard({ startDate, endDate, workingDays }) {
   const hasSelectedRange = startDate && endDate && workingDays > 0;
 
   return (
@@ -30,4 +30,3 @@ function TeamAvailabilityCard({ startDate, endDate, workingDays }) {
   );
 }
 
-export default TeamAvailabilityCard;

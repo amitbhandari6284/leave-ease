@@ -1,7 +1,7 @@
 
 import { X, CalendarDays, UserRound } from "lucide-react"
 
-import { formatFullDate } from "../../calendar/utils/helper";
+import { formatFullDate } from "../../calendar/utils/calendarHelpers.js";
 
 export default function DayDetailsDrawer({ dateValue, events, onClose }) {
   if (!dateValue) return null;

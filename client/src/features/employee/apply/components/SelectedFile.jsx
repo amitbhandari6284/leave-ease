@@ -12,7 +12,7 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SelectedFile({ file, onRemove }) {
+export default function SelectedFile({ file, onRemove }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-lg bg-white p-4 text-left">
       <div className="flex min-w-0 items-center gap-3">
@@ -39,4 +39,3 @@ function SelectedFile({ file, onRemove }) {
   );
 }
 
-export default SelectedFile;

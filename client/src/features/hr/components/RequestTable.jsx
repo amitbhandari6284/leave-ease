@@ -1,10 +1,10 @@
 import { Link } from "react-router";
 import { ArrowUpRight } from "lucide-react";
 
-import EmployeeDisplay from "../../leave-review/components/EmployeeDisplay";
+import EmployeeDisplay from "./EmployeeDisplay.jsx";
 import LeaveTypeBadge from "./LeaveTypeBadge";
 
-import { formatDate } from "../../../utils/helper";
+import { formatDate } from "../../../lib/helper";
 
 function RequestTable({ request }) {
   return (
