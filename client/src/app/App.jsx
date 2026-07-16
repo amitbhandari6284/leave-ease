@@ -9,6 +9,7 @@ import MyLeavesPage from "../pages/employee/MyLeavesPage";
 import HrDashboard from "../pages/hr/HrDashboard";
 import PendingRequestsPage from "../pages/hr/PendingRequestsPage";
 import DepartmentCalendarPage from "../pages/hr/DepartmentCalendarPage";
+import AdminDashboard from "../pages/admin/AdminDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,10 +29,14 @@ function App() {
           <Route index element={<Navigate replace to="login" />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AppLayout />}>
+
+            {/* dashboards */}
             <Route path="/dashboard" element={<EmployeeDashboard />} />
+            <Route path="/hr/dashboard" element={<HrDashboard />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
             <Route path="/apply-leave" element={<ApplyLeavePage />} />
             <Route path="/my-leaves" element={<MyLeavesPage />} />
-            <Route path="/hr/dashboard" element={<HrDashboard />} />
             <Route path="/pending-requests" element={<PendingRequestsPage />} />
             <Route path="/pending-requests/:requestId" element={<PendingRequestsPage />} />
             <Route path="/calendar" element={<DepartmentCalendarPage />} />

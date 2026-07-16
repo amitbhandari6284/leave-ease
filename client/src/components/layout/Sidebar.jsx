@@ -65,14 +65,18 @@ const adminLinks = [
     to: "/reports",
     icon: BarChart3,
   },
+  {
+    label: "Admin Dashboard",
+    to: "/admin/dashboard",
+    icon: LayoutDashboard,
+  },
 ];
 
 function Sidebar({ isOpen, onClose }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-violet-200 bg-white transition-transform duration-200 lg:translate-x-0 ${
-        isOpen ? "translate-x-0" : "-translate-x-full"
-      }`}
+      className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-violet-200 bg-white transition-transform duration-200 lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
     >
       <div className="flex h-24 items-start justify-between px-6 pt-6">
         <div>
@@ -142,10 +146,9 @@ function SidebarLink({ link, onClick }) {
       to={link.to}
       onClick={onClick}
       className={({ isActive }) =>
-        `relative flex min-h-11 items-center gap-3 rounded-r-lg px-4 text-sm font-semibold transition ${
-          isActive
-            ? "bg-indigo-50 text-indigo-700 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-indigo-600"
-            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+        `relative flex min-h-11 items-center gap-3 rounded-r-lg px-4 text-sm font-semibold transition ${isActive
+          ? "bg-indigo-50 text-indigo-700 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-indigo-600"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         }`
       }
     >
