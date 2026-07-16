@@ -8,6 +8,7 @@ export function formatDate(dateValue) {
   }).format(new Date(year, month - 1, day));
 }
 
+
 export function escapeCsvValue(value) {
   const stringValue = String(value ?? "");
   if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
