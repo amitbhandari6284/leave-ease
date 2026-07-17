@@ -3,7 +3,7 @@ import { EllipsisVertical } from "lucide-react";
 import { formatDate } from "../../../../lib/helper.js";
 
 import LeaveTypeDisplay from "./LeaveTypeDisplay";
-import StatusBadge from "./StatusBadge";
+import StatusBadge from "../../../../components/ui/StatusBadge.jsx";
 
 function ApplicationTable({ application, isMenuOpen, onToggleMenu, onCancel, openUpward }) {
   return (

@@ -1,5 +1,5 @@
 import LeaveTypeDisplay from "./LeaveTypeDisplay";
-import StatusBadge from "./StatusBadge";
+import StatusBadge from "../../../../components/ui/StatusBadge";
 
 import { formatDate } from "../../../../lib/helper.js";
 

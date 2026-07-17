@@ -6,7 +6,7 @@ import { initialPendingRequests } from "../../data/hrRequests";
 import RequestRow from "../../features/hr/components/RequestRow.jsx";
 import RequestCard from "../../features/hr/components/RequestCard.jsx";
 import ReviewRequestDrawer from "../../features/hr/components/ReviewRequestDrawer.jsx";
-import SummaryCard from "../../features/hr/components/SummaryCard.jsx";
+import SummaryCard from "../../components/ui/SummaryCard.jsx";
 import EmptyState from "../../components/ui/EmptyState.jsx";
 
 function PendingRequestsPage() {
@@ -102,19 +102,29 @@ function PendingRequestsPage() {
       )}
 
       <section className="mt-8 grid gap-5 sm:grid-cols-2">
-        <SummaryCard
-          label="Total Pending"
-          value={pendingRequests.length}
-          icon={Clock3}
-          iconClass="bg-indigo-100 text-indigo-600"
-        />
+        <SummaryCard>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-600">Total Pending</p>
+              <p className="mt-4 text-4xl font-bold text-slate-950">{pendingRequests.length}</p>
+            </div>
+            <div className={`flex size-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600`}>
+              <Clock3 className="size-5" />
+            </div>
+          </div>
+        </SummaryCard>
 
-        <SummaryCard
-          label="Requires Attention"
-          value={requiresAttention}
-          icon={AlertTriangle}
-          iconClass="bg-amber-100 text-amber-700"
-        />
+        <SummaryCard>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-600">Requires Attention</p>
+              <p className="mt-4 text-4xl font-bold text-slate-950">{requiresAttention}</p>
+            </div>
+            <div className={`flex size-11 items-center justify-center rounded-full  bg-amber-100 text-amber-700`}>
+              <AlertTriangle className="size-5" />
+            </div>
+          </div>
+        </SummaryCard>
       </section>
 
       <section className="mt-6 rounded-xl border border-violet-200 bg-white p-4 shadow-sm">
