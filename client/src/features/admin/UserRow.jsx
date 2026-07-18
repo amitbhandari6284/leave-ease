@@ -10,6 +10,8 @@ export default function UserRow({
   onToggleMenu,
   onToggleStatus,
 }) {
+
+  const statusBadegeClassName = user.status === "Acivte" ? "bg-emerald-100 text-emerald-700" : ""
   return (
     <tr className="border-b border-violet-100 text-sm last:border-b-0">
       <td className="px-6 py-5 align-middle">
@@ -32,7 +34,7 @@ export default function UserRow({
       </td>
 
       <td className="px-6 py-5 align-middle">
-        <StatusBadge status={user.status} />
+        <StatusBadge className={statusBadegeClassName} status={user.status} />
       </td>
 
       <td data-user-menu className="relative px-6 py-5 text-right align-middle">

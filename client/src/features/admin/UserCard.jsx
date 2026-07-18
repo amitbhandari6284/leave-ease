@@ -3,11 +3,12 @@ import RoleBadge from "./RoleBadge";
 import UserIdentity from "./UserIdentity";
 
 export default function UserCard({ user, onToggleStatus }) {
+  const statusBadegeClassName = user.status === "Acivte" ? "bg-emerald-100 text-emerald-700" : ""
   return (
     <article className="p-5">
       <div className="flex items-start justify-between gap-4">
         <UserIdentity user={user} />
-        <StatusBadge status={user.status} />
+        <StatusBadge className={statusBadegeClassName} status={user.status} />
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">

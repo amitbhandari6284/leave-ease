@@ -11,6 +11,7 @@ import PendingRequestsPage from "../pages/hr/PendingRequestsPage";
 import DepartmentCalendarPage from "../pages/hr/DepartmentCalendarPage";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import UserManagementPage from "../pages/admin/UserManagementPage";
+import PolicyManagementPage from "../pages/admin/PolicyManagementPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,11 +43,11 @@ function App() {
             <Route path="/pending-requests/:requestId" element={<PendingRequestsPage />} />
             <Route path="/calendar" element={<DepartmentCalendarPage />} />
             <Route path="/users" element={<UserManagementPage />} />
+            <Route path="/policies" element={<PolicyManagementPage />} />
 
             {/*
             <Route path="/review-request/:requestId" element={<PlaceholderPage />} />
             <Route path="/pending-requests" element={<PlaceholderPage />} />
-            <Route path="/policies" element={<PlaceholderPage />} />
             <Route path="/reports" element={<PlaceholderPage />} />
             */}
           </Route>

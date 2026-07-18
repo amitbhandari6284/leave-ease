@@ -6,6 +6,8 @@ import LeaveTypeDisplay from "./LeaveTypeDisplay";
 import StatusBadge from "../../../../components/ui/StatusBadge.jsx";
 
 function ApplicationTable({ application, isMenuOpen, onToggleMenu, onCancel, openUpward }) {
+
+  const statusBadegeClassName = application.status === "Approved" ? "bg-emerald-100 text-emerald-700" : application.status == "Pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
   return (
     <tr className="border-b border-violet-100 text-sm last:border-b-0">
       <td className="px-6 py-5">
@@ -21,7 +23,7 @@ function ApplicationTable({ application, isMenuOpen, onToggleMenu, onCancel, ope
       <td className="px-6 py-5 text-slate-600">{formatDate(application.appliedOn)}</td>
 
       <td className="px-6 py-5">
-        <StatusBadge status={application.status} />
+        <StatusBadge className={statusBadegeClassName} status={application.status} />
       </td>
 
       <td className="relative px-6 py-5 text-right">

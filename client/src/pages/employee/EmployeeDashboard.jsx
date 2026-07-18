@@ -189,7 +189,7 @@ function RecentApplications() {
                 <td className="px-6 py-4 text-slate-600">{application.appliedDate}</td>
 
                 <td className="px-6 py-4">
-                  <StatusBadge status={application.status} />
+                  <StatusBadge className={application.status === "Approved" ? "bg-emerald-100 text-emerald-700" : application.status == "Pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"} status={application.status} />
                 </td>
 
                 <td className="px-6 py-4 text-right">
