@@ -1,4 +1,4 @@
-export const initialPendingRequests = [
+export const initialLeaveRequests = [
   {
     id: "request-1",
     employee: "Marcus Chen",
@@ -15,13 +15,7 @@ export const initialPendingRequests = [
     currentBalance: 14,
     totalBalance: 20,
     hasDocument: false,
-    conflicts: [
-      {
-        employee: "Sarah Jenkins",
-        initials: "SJ",
-        date: "2026-07-17",
-      },
-    ],
+    conflicts: [{ employee: "Sarah Jenkins", initials: "SJ", date: "2026-07-17" }],
     status: "Pending",
   },
   {
@@ -35,7 +29,8 @@ export const initialPendingRequests = [
     startDate: "2026-07-14",
     endDate: "2026-07-15",
     days: 2,
-    reason: "Doctor has advised two days of rest. Medical certificate has been attached.",
+    reason:
+      "Doctor has advised two days of rest. Medical certificate has been attached.",
     currentBalance: 6,
     totalBalance: 8,
     hasDocument: true,
@@ -53,12 +48,16 @@ export const initialPendingRequests = [
     startDate: "2026-07-22",
     endDate: "2026-07-31",
     days: 8,
-    reason: "Planned annual vacation. Current assignments will be completed before departure.",
+    reason:
+      "Planned annual vacation. Current assignments will be completed before departure.",
     currentBalance: 16,
     totalBalance: 20,
     hasDocument: false,
     conflicts: [],
-    status: "Pending",
+    status: "Approved",
+    decidedBy: "Neha Sharma",
+    decidedOn: "2026-07-10",
+    decisionRemarks: "Approved. Work handover confirmed.",
   },
   {
     id: "request-4",
@@ -75,13 +74,32 @@ export const initialPendingRequests = [
     currentBalance: 4,
     totalBalance: 12,
     hasDocument: false,
-    conflicts: [
-      {
-        employee: "Marcus Chen",
-        initials: "MC",
-        date: "2026-07-18",
-      },
-    ],
-    status: "Pending",
+    conflicts: [{ employee: "Marcus Chen", initials: "MC", date: "2026-07-18" }],
+    status: "Rejected",
+    decidedBy: "Neha Sharma",
+    decidedOn: "2026-07-10",
+    decisionRemarks:
+      "Rejected due to team coverage conflict on the selected date.",
+  },
+  {
+    id: "request-5",
+    employee: "Sarah Jenkins",
+    initials: "SJ",
+    designation: "QA Engineer",
+    department: "Engineering",
+    leaveType: "Annual Leave",
+    submittedOn: "2026-06-28",
+    startDate: "2026-07-03",
+    endDate: "2026-07-04",
+    days: 2,
+    reason: "Short planned vacation.",
+    currentBalance: 10,
+    totalBalance: 20,
+    hasDocument: false,
+    conflicts: [],
+    status: "Cancelled",
+    decidedBy: "",
+    decidedOn: "",
+    decisionRemarks: "Cancelled by employee before review.",
   },
 ];

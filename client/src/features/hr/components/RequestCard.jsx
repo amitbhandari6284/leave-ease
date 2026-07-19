@@ -1,6 +1,5 @@
 import { formatDate } from "../../../lib/helper.js";
 import Employee from "./Employee";
-import AttentionBadge from "./AttentionBadge";
 import ReviewLink from "./ReviewLink";
 
 export default function RequestCard({ request }) {
@@ -8,7 +7,6 @@ export default function RequestCard({ request }) {
     <article className="p-5">
       <div className="flex items-start justify-between gap-4">
         <Employee request={request} />
-        <AttentionBadge request={request} />
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
@@ -30,7 +28,7 @@ export default function RequestCard({ request }) {
         </div>
       </dl>
 
-      <ReviewLink requestId={request.id} fullWidth />
+      <ReviewLink request={request} fullWidth />
     </article>
   );
 }

@@ -163,7 +163,29 @@ function ReviewRequestDrawer({ request, onClose, onApprove, onReject }) {
         </div>
 
         <footer className="shrink-0 border-t border-violet-200 bg-white px-6 py-5">
-          {isRejecting ? (
+          {request.status !== "Pending" ? (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Status: {request.status}
+                </p>
+
+                {request.decidedBy && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    By {request.decidedBy} on {formatDate(request.decidedOn)}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="h-11 rounded-lg bg-indigo-600 px-6 font-semibold text-white hover:bg-indigo-700"
+                onClick={onClose}
+              >
+                Close
+              </button>
+            </div>
+          ) : isRejecting ? (
             <div className="flex gap-3">
               <button
                 type="button"

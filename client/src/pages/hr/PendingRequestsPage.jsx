@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
-import { initialPendingRequests } from "../../data/hrRequests";
+import { initialLeaveRequests } from "../../data/hrRequests";
 import RequestRow from "../../features/hr/components/RequestRow.jsx";
 import RequestCard from "../../features/hr/components/RequestCard.jsx";
 import ReviewRequestDrawer from "../../features/hr/components/ReviewRequestDrawer.jsx";
@@ -13,19 +13,23 @@ function PendingRequestsPage() {
   const { requestId } = useParams();
   const navigate = useNavigate();
 
-  const [requests, setRequests] = useState(initialPendingRequests);
+  const [requests, setRequests] = useState(initialLeaveRequests);
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
   const [leaveTypeFilter, setLeaveTypeFilter] = useState("All");
   const [message, setMessage] = useState("");
+  const [statusTab, setStatusTab] = useState("All");
 
-  const pendingRequests = requests.filter((request) => request.status === "Pending"); const selectedRequest = pendingRequests.find((request) => request.id === requestId);
+  const pendingRequests = requests.filter(
+    (request) => request.status === "Pending",
+  );
+  const selectedRequest = requests.find((request) => request.id === requestId);
   const departments = [...new Set(pendingRequests.map((request) => request.department))];
   const leaveTypes = [...new Set(pendingRequests.map((request) => request.leaveType))];
   const filteredRequests = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    return pendingRequests.filter((request) => {
+    return requests.filter((request) => {
       const matchesSearch =
         !normalizedSearch ||
         request.employee.toLowerCase().includes(normalizedSearch) ||
@@ -33,12 +37,17 @@ function PendingRequestsPage() {
         request.leaveType.toLowerCase().includes(normalizedSearch);
 
       const matchesDepartment = departmentFilter === "All" || request.department === departmentFilter;
-
       const matchesLeaveType = leaveTypeFilter === "All" || request.leaveType === leaveTypeFilter;
+      const matchesStatusTab = statusTab === "All" || request.status === statusTab;
 
-      return matchesSearch && matchesDepartment && matchesLeaveType;
+      return (
+        matchesSearch &&
+        matchesDepartment &&
+        matchesLeaveType &&
+        matchesStatusTab
+      );
     });
-  }, [pendingRequests, searchTerm, departmentFilter, leaveTypeFilter]);
+  }, [requests, searchTerm, departmentFilter, leaveTypeFilter, statusTab]);
 
   const requiresAttention = pendingRequests.filter((request) => request.conflicts.length > 0 || request.hasDocument).length;
 
@@ -86,9 +95,8 @@ function PendingRequestsPage() {
   return (
     <div className="mx-auto max-w-7xl">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Pending Requests</h1>
-
-        <p className="mt-1 text-slate-500">Review and manage leave applications awaiting approval.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Leave Requests </h1>
+        <p className="mt-1 text-slate-500"> Review pending applications and view approved, rejected, or cancelled history. </p>
       </header>
 
       {message && (
@@ -171,22 +179,37 @@ function PendingRequestsPage() {
         </div>
       </section>
 
+      <section className="mt-6 flex flex-wrap gap-2">
+        {["All", "Pending", "Approved", "Rejected", "Cancelled"].map((status) => (
+          <button
+            key={status}
+            type="button"
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${statusTab === status
+              ? "bg-indigo-600 text-white"
+              : "border border-violet-200 bg-white text-slate-600 hover:bg-violet-50"
+              }`}
+            onClick={() => setStatusTab(status)}
+          >
+            {status}
+          </button>
+        ))}
+      </section>
+
       <section className="mt-6 overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
         <header className="border-b border-violet-200 px-6 py-5">
-          <h2 className="text-xl font-bold text-slate-950">Review Queue</h2>
-
-          <p className="mt-1 text-sm text-slate-500">Oldest applications are shown first.</p>
+          <h2 className="text-xl font-bold text-slate-950"> Request Records </h2>
+          <p className="mt-1 text-sm text-slate-500"> Pending requests can be reviewed. Completed requests are available for history. </p>
         </header>
 
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-262.5 table-fixed border-collapse text-left">
             <colgroup>
-              <col className="w-[22%]" />
+              <col className="w-[24%]" />
               <col className="w-[15%]" />
-              <col className="w-[19%]" />
-              <col className="w-[15%]" />
+              <col className="w-[25%]" />
               <col className="w-[13%]" />
-              <col className="w-[16%]" />
+              <col className="w-[11%]" />
+              <col className="w-[12%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-violet-200 bg-violet-50 text-xs uppercase tracking-wide text-slate-600">
@@ -194,7 +217,7 @@ function PendingRequestsPage() {
                 <th className="whitespace-nowrap px-6 py-4 font-semibold">Leave Type</th>
                 <th className="whitespace-nowrap px-6 py-4 font-semibold">Duration</th>
                 <th className="whitespace-nowrap px-6 py-4 font-semibold">Submitted</th>
-                <th className="whitespace-nowrap px-6 py-4 font-semibold">Attention</th>
+                <th className="whitespace-nowrap px-6 py-4 font-semibold">Status</th>
                 <th className="whitespace-nowrap pr-14 py-4 text-right font-semibold">Action</th>
               </tr>
             </thead>

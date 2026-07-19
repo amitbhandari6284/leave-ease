@@ -44,7 +44,7 @@ const hrLinks = [
     roles: ["HR"],
   },
   {
-    label: "Pending Requests",
+    label: "Leave Requests",
     to: "/pending-requests",
     icon: ClipboardClock,
     roles: ["HR"],

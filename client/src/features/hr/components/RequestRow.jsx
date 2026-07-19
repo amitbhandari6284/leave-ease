@@ -1,10 +1,14 @@
 import { formatDateRange, formatDate } from "../../../lib/helper.js";
 import ReviewLink from "./ReviewLink.jsx";
-import AttentionBadge from "./AttentionBadge.jsx";
 import Employee from "./Employee.jsx"
+import StatusBadge from "../../../components/ui/StatusBadge.jsx";
 
 
 export default function RequestRow({ request }) {
+  const statusBadegeClassName = (request.status == "Pending" ? "bg-amber-100 text-amber-700"
+    : request.status == "Approved" ? "bg-emerald-100 text-emerald-700"
+      : request.status === "Rejected" ? "bg-red-100 text-red-700"
+        : "")
   return (
     <tr className="border-b border-violet-100 text-sm last:border-b-0">
       <td className="px-6 py-5 align-middle">
@@ -28,13 +32,12 @@ export default function RequestRow({ request }) {
       <td className="whitespace-nowrap px-6 py-5 align-middle text-slate-600">
         {formatDate(request.submittedOn)}
       </td>
-
       <td className="px-6 py-5 align-middle">
-        <AttentionBadge request={request} />
+        <StatusBadge className={statusBadegeClassName} status={request.status} />
       </td>
 
       <td className="whitespace-nowrap px-6 py-5 text-right align-middle">
-        <ReviewLink requestId={request.id} />
+        <ReviewLink request={request} />
       </td>
     </tr>
   );
