@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Plus, Search, ShieldCheck } from "lucide-react";
 
-import PolicyRow from "./PolicyRow";
-import PolicyCard from "./PolicyCard";
-import PolicyOverview from "./PolicyOverview";
-import GlobalSettings from "./GlobalSettings";
-import PolicyModal from "./PolicyModal";
+import PolicyRow from "../../features/admin/PolicyRow";
+import PolicyCard from "../../features/admin/PolicyCard";
+import PolicyOverview from "../../features/admin/PolicyOverview";
+import GlobalSettings from "../../features/admin/GlobalSettings";
+import PolicyModal from "../../features/admin/PolicyModal";
 
 const initialPolicies = [
   {
