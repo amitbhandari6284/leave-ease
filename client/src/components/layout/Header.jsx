@@ -1,6 +1,17 @@
 import { Bell, Menu } from "lucide-react";
+import { useNavigate } from "react-router";
+
+import { useAuth } from "../../features/auth/AuthContext";
 
 function Header({ onOpenSidebar }) {
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+
+  function handleLogout() {
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-violet-200 bg-white px-4 sm:px-6">
       <div className="flex items-center gap-3">
@@ -29,14 +40,23 @@ function Header({ onOpenSidebar }) {
 
         <div className="h-8 w-px bg-slate-200" />
 
-        <button type="button" className="flex items-center gap-3 text-left">
+        <button
+          type="button"
+          className="flex items-center gap-3 text-left"
+          onClick={handleLogout}
+          title="Logout"
+        >
           <div className="hidden sm:block">
-            <p className="text-sm font-semibold text-slate-900">Amit Patel</p>
-            <p className="text-right text-xs text-slate-500">Profile</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {user?.name}
+            </p>
+            <p className="text-right text-xs text-slate-500">
+              {user?.role}
+            </p>
           </div>
 
           <div className="flex size-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
-            AP
+            {user?.initials}
           </div>
         </button>
       </div>

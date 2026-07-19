@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { BadgeCheck, CalendarCheck2, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
+import { useAuth } from "../../features/auth/AuthContext";
 
 function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation()
+  const { login } = useAuth()
+
+  const redirectPath = location.state?.from?.pathname;
 
   const {
     register,
@@ -20,11 +25,13 @@ function LoginPage() {
   });
 
   async function onSubmit(formData) {
-    console.log(formData);
-
-    // Temporary delay to test the loading state.
     await new Promise((resolve) => setTimeout(resolve, 800));
-    navigate("/dashboard");
+
+    const loggedInUser = login(formData);
+
+    navigate(redirectPath || loggedInUser.dashboardPath, {
+      replace: true,
+    });
   }
 
   return (
@@ -60,9 +67,8 @@ function LoginPage() {
                   type="email"
                   autoComplete="email"
                   placeholder="employee@company.com"
-                  className={`h-13 w-full border bg-violet-50/40 pr-4 pl-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${
-                    errors.email ? "border-red-500" : "border-violet-200"
-                  }`}
+                  className={`h-13 w-full border bg-violet-50/40 pr-4 pl-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${errors.email ? "border-red-500" : "border-violet-200"
+                    }`}
                   {...register("email", {
                     required: "Email address is required",
                     pattern: {
@@ -98,9 +104,8 @@ function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="Enter your password"
-                  className={`h-13 w-full border bg-violet-50/40 pr-12 pl-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${
-                    errors.password ? "border-red-500" : "border-violet-200"
-                  }`}
+                  className={`h-13 w-full border bg-violet-50/40 pr-12 pl-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${errors.password ? "border-red-500" : "border-violet-200"
+                    }`}
                   {...register("password", {
                     required: "Password is required",
                     minLength: {

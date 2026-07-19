@@ -12,6 +12,7 @@ import DepartmentCalendarPage from "../pages/hr/DepartmentCalendarPage";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import UserManagementPage from "../pages/admin/UserManagementPage";
 import PolicyManagementPage from "../pages/admin/PolicyManagementPage";
+import ProtectedRoute from "../features/auth/ProtectedRoute";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,29 +29,37 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route index element={<Navigate replace to="login" />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route element={<AppLayout />}>
 
-            {/* dashboards */}
-            <Route path="/dashboard" element={<EmployeeDashboard />} />
-            <Route path="/hr/dashboard" element={<HrDashboard />} />
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+              <Route element={<ProtectedRoute allowedRoles={["EMPLOYEE", "HR"]} />}>
+                <Route path="/dashboard" element={<EmployeeDashboard />} />
+                <Route path="/my-leaves" element={<MyLeavesPage />} />
+                <Route path="/apply-leave" element={<ApplyLeavePage />} />
+              </Route>
 
-            <Route path="/apply-leave" element={<ApplyLeavePage />} />
-            <Route path="/my-leaves" element={<MyLeavesPage />} />
-            <Route path="/pending-requests" element={<PendingRequestsPage />} />
-            <Route path="/pending-requests/:requestId" element={<PendingRequestsPage />} />
-            <Route path="/calendar" element={<DepartmentCalendarPage />} />
-            <Route path="/users" element={<UserManagementPage />} />
-            <Route path="/policies" element={<PolicyManagementPage />} />
+              <Route element={<ProtectedRoute allowedRoles={["HR", "ADMIN"]} />}>
+                <Route path="/hr/dashboard" element={<HrDashboard />} />
+                <Route path="/calendar" element={<DepartmentCalendarPage />} />
+                <Route path="/pending-requests" element={<PendingRequestsPage />} />
+                <Route
+                  path="/pending-requests/:requestId"
+                  element={<PendingRequestsPage />}
+                />
+              </Route>
 
-            {/*
-            <Route path="/review-request/:requestId" element={<PlaceholderPage />} />
-            <Route path="/pending-requests" element={<PlaceholderPage />} />
-            <Route path="/reports" element={<PlaceholderPage />} />
-            */}
+              <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/users" element={<UserManagementPage />} />
+                <Route path="/policies" element={<PolicyManagementPage />} />
+                {/* <Route path="/reports" element={<PlaceholderPage />} /> */}
+              </Route>
+            </Route>
           </Route>
+
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
