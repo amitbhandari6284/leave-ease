@@ -1,7 +1,7 @@
 import { Bell, Menu } from "lucide-react";
 import { useNavigate } from "react-router";
 
-import { useAuth } from "../../features/auth/AuthContext";
+import { useAuth } from "../../features/auth/components/AuthContext";
 
 function Header({ onOpenSidebar }) {
   const navigate = useNavigate()

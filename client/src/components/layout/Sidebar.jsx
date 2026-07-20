@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router";
 
-import { useAuth } from "../../features/auth/AuthContext";
+import { useAuth } from "../../features/auth/components/AuthContext";
 
 const employeeLinks = [
   {

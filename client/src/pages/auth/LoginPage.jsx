@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { BadgeCheck, CalendarCheck2, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
-import { useAuth } from "../../features/auth/AuthContext";
+import { useAuth } from "../../features/auth/components/AuthContext";
 
 function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);

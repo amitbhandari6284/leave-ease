@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, UserPlus, Users } from "lucide-react";
 
 import SummaryCard from "../../components/ui/SummaryCard";
-import UserRow from "../../features/admin/UserRow";
-import UserCard from "../../features/admin/UserCard";
-import AddUserModal from "../../features/admin/AddUserModal";
+import UserRow from "../../features/admin/components/UserRow";
+import UserCard from "../../features/admin/components/UserCard";
+import AddUserModal from "../../features/admin/components/AddUserModal";
 
 const initialUsers = [
   {

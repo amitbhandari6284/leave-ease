@@ -12,7 +12,7 @@ import DepartmentCalendarPage from "../pages/hr/DepartmentCalendarPage";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import UserManagementPage from "../pages/admin/UserManagementPage";
 import PolicyManagementPage from "../pages/admin/PolicyManagementPage";
-import ProtectedRoute from "../features/auth/ProtectedRoute";
+import ProtectedRoute from "../features/auth/components/ProtectedRoute";
 
 const queryClient = new QueryClient({
   defaultOptions: {
