@@ -1,16 +1,11 @@
 import { Bell, Menu } from "lucide-react";
-import { useNavigate } from "react-router";
 
 import { useAuth } from "../../features/auth/components/AuthContext";
+import { useLogout } from "../../features/auth/hooks/useLogout";
 
 function Header({ onOpenSidebar }) {
-  const navigate = useNavigate()
-  const { user, logout } = useAuth()
-
-  function handleLogout() {
-    logout();
-    navigate("/login", { replace: true });
-  }
+  const { user } = useAuth()
+  const handleLogout = useLogout()
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-violet-200 bg-white px-4 sm:px-6">

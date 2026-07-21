@@ -1,7 +1,7 @@
 import { Building2, EllipsisVertical } from "lucide-react";
 import UserIdentity from "./UserIdentity";
 import RoleBadge from "./RoleBadge";
-import StatusBadge from "../../components/ui/StatusBadge";
+import StatusBadge from "../../../components/ui/StatusBadge";
 
 export default function UserRow({
   user,

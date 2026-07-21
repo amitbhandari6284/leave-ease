@@ -1,4 +1,4 @@
-import StatusBadge from "../../components/ui/StatusBadge";
+import StatusBadge from "../../../components/ui/StatusBadge.jsx";
 import RoleBadge from "./RoleBadge";
 import UserIdentity from "./UserIdentity";
 

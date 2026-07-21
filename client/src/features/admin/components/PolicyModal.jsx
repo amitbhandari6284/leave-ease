@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { useEffect } from "react";
-import FormField from "../../features/admin/FormField";
+import FormField from "../components/FormField.jsx";
 import { X } from "lucide-react";
 
 export default function PolicyModal({ isOpen, policy, onClose, onSave }) {

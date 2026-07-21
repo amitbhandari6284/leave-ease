@@ -14,6 +14,7 @@ import {
 import { NavLink } from "react-router";
 
 import { useAuth } from "../../features/auth/components/AuthContext";
+import { useLogout } from "../../features/auth/hooks/useLogout";
 
 const employeeLinks = [
   {
@@ -89,7 +90,8 @@ function getVisibleLinks(links, role) {
 }
 
 function Sidebar({ isOpen, onClose }) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
+  const handleLogout = useLogout()
 
   const visibleEmployeeLinks = getVisibleLinks(employeeLinks, user?.role);
   const visibleHrLinks = getVisibleLinks(hrLinks, user?.role);
@@ -163,7 +165,7 @@ function Sidebar({ isOpen, onClose }) {
 
       <div className="border-t border-violet-200 px-2 py-5">
         <SidebarButton icon={Settings}>Settings</SidebarButton>
-        <SidebarButton icon={LogOut} onClick={logout}>Logout</SidebarButton>
+        <SidebarButton icon={LogOut} onClick={handleLogout}>Logout</SidebarButton>
       </div>
     </aside>
   );

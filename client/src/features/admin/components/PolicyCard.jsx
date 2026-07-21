@@ -1,4 +1,4 @@
-import StatusBadge from "../../components/ui/StatusBadge";
+import StatusBadge from "../../../components/ui/StatusBadge";
 import PolicyIdentity from "./PolicyIdentity";
 import Toggle from "./Toggle";
 

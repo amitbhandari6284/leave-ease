@@ -1,5 +1,5 @@
 import { Edit3, Trash2 } from "lucide-react";
-import StatusBadge from "../../components/ui/StatusBadge";
+import StatusBadge from "../../../components/ui/StatusBadge";
 import PolicyIdentity from "./PolicyIdentity";
 import Toggle from "./Toggle";
 
