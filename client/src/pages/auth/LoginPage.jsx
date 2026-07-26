@@ -40,7 +40,7 @@ function LoginPage() {
       setError("root", {
         message:
           error.response?.data?.message ||
-          "Unable to sign in. Please check your credentials.",
+          error.message,
       });
     }
   }
@@ -130,7 +130,6 @@ function LoginPage() {
 
                 <div className="relative mt-2">
                   <Mail className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-slate-400" />
-
                   <input
                     id="email"
                     type="email"
@@ -138,8 +137,8 @@ function LoginPage() {
                     placeholder="admin@leaveease.com"
                     aria-invalid={Boolean(errors.email)}
                     className={`${inputClass} ${errors.email
-                        ? "border-red-300 focus:border-red-500 focus:ring-red-100"
-                        : ""
+                      ? "border-red-300 focus:border-red-500 focus:ring-red-100"
+                      : ""
                       }`}
                     {...register("email", {
                       required: "Email address is required.",
@@ -176,8 +175,8 @@ function LoginPage() {
                     placeholder="Enter your password"
                     aria-invalid={Boolean(errors.password)}
                     className={`${inputClass} pr-12 ${errors.password
-                        ? "border-red-300 focus:border-red-500 focus:ring-red-100"
-                        : ""
+                      ? "border-red-300 focus:border-red-500 focus:ring-red-100"
+                      : ""
                       }`}
                     {...register("password", {
                       required: "Password is required.",

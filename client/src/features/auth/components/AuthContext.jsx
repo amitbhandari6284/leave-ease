@@ -42,7 +42,6 @@ function AuthProvider({ children }) {
   const logoutMutation = useMutation({
     mutationFn: logoutUser,
     onSettled: () => {
-      queryClient.removeQueries({ queryKey: ["auth", "current-user"] });
       queryClient.clear();
     },
   });

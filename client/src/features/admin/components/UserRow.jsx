@@ -3,24 +3,15 @@ import UserIdentity from "./UserIdentity";
 import RoleBadge from "./RoleBadge";
 import StatusBadge from "../../../components/ui/StatusBadge";
 
-export default function UserRow({
-  user,
-  isMenuOpen,
-  openUpward,
-  onToggleMenu,
-  onToggleStatus,
-}) {
-
-  const statusBadegeClassName = user.status === "Acivte" ? "bg-emerald-100 text-emerald-700" : ""
+export default function UserRow({ user, isMenuOpen, openUpward, onToggleMenu, onToggleStatus }) {
+  const isActive = user.status === "Active";
   return (
     <tr className="border-b border-violet-100 text-sm last:border-b-0">
       <td className="px-6 py-5 align-middle">
         <UserIdentity user={user} />
       </td>
 
-      <td className="whitespace-nowrap px-6 py-5 align-middle font-medium text-slate-700">
-        {user.employeeId}
-      </td>
+      <td className="px-6 py-5 align-middle font-medium whitespace-nowrap text-slate-700">{user.employeeId}</td>
 
       <td className="px-6 py-5 align-middle">
         <div className="flex items-center gap-2 text-slate-700">
@@ -34,7 +25,7 @@ export default function UserRow({
       </td>
 
       <td className="px-6 py-5 align-middle">
-        <StatusBadge className={statusBadegeClassName} status={user.status} />
+        <StatusBadge status={user.status} />
       </td>
 
       <td data-user-menu className="relative px-6 py-5 text-right align-middle">
@@ -48,26 +39,18 @@ export default function UserRow({
         </button>
 
         {isMenuOpen && (
-          <div
-            className={`absolute right-6 z-20 w-44 rounded-lg border border-violet-200 bg-white p-1 text-left shadow-lg ${openUpward ? "bottom-14" : "top-14"
-              }`}
-          >
-            <button
-              type="button"
-              className="w-full rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-            >
+          <div className={`absolute right-6 z-20 w-44 rounded-lg border border-violet-200 bg-white p-1 text-left shadow-lg ${openUpward ? "bottom-14" : "top-14"}`} >
+            <button type="button" className="w-full rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
               Edit user
             </button>
 
             <button
               type="button"
-              className={`w-full rounded-md px-3 py-2 text-sm ${user.status === "Active"
-                ? "text-red-600 hover:bg-red-50"
-                : "text-emerald-700 hover:bg-emerald-50"
+              className={`w-full rounded-md px-3 py-2 text-sm ${isActive ? "text-red-600 hover:bg-red-50" : "text-emerald-700 hover:bg-emerald-50"
                 }`}
               onClick={onToggleStatus}
             >
-              {user.status === "Active" ? "Deactivate" : "Activate"}
+              {isActive ? "Deactivate" : "Activate"}
             </button>
           </div>
         )}

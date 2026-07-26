@@ -1,7 +1,9 @@
-import { BadgeIndianRupee, CalendarOff, CirclePlus, EllipsisVertical, Stethoscope, Plane } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BadgeIndianRupee, CalendarOff, CirclePlus, Stethoscope, Plane } from "lucide-react";
 import { Link } from "react-router";
 
-import StatusBadge from "../../components/ui/StatusBadge.jsx";
+import ApplicationItem, { GRID_COLUMNS } from "../../components/ui/ApplicationItem.jsx";
+import ApplicationDetailsDialog from "../../components/ui/ApplicationDetailsDialog.jsx";
 
 const leaveBalances = [
   {
@@ -50,33 +52,45 @@ const leaveBalances = [
   },
 ];
 
+// Same application shape used across the app (leaveMappers.js produces this
+// from real API responses) so this widget can reuse the shared components
+// as-is instead of a parallel, drifting implementation.
 const recentApplications = [
   {
     id: 1,
     type: "Casual Leave",
-    range: "Oct 12 - Oct 13, 2023",
-    days: 2,
-    appliedDate: "Oct 05, 2023",
     status: "Approved",
-    dotClass: "bg-indigo-600",
+    startDate: "2023-10-12",
+    endDate: "2023-10-13",
+    days: 2,
+    appliedOn: "2023-10-05",
+    reason: "Family function out of town.",
+    remarks: "",
+    documentUrl: "",
   },
   {
     id: 2,
     type: "Sick Leave",
-    range: "Sep 28 - Sep 28, 2023",
-    days: 1,
-    appliedDate: "Sep 28, 2023",
     status: "Approved",
-    dotClass: "bg-teal-700",
+    startDate: "2023-09-28",
+    endDate: "2023-09-28",
+    days: 1,
+    appliedOn: "2023-09-28",
+    reason: "Fever, resting at home.",
+    remarks: "",
+    documentUrl: "",
   },
   {
     id: 3,
     type: "Earned Leave",
-    range: "Nov 20 - Nov 24, 2023",
-    days: 5,
-    appliedDate: "Oct 20, 2023",
     status: "Pending",
-    dotClass: "bg-amber-800",
+    startDate: "2023-11-20",
+    endDate: "2023-11-24",
+    days: 5,
+    appliedOn: "2023-10-20",
+    reason: "Annual family trip.",
+    remarks: "",
+    documentUrl: "",
   },
 ];
 
@@ -149,6 +163,25 @@ function LeaveBalanceCard({ leave }) {
 }
 
 function RecentApplications() {
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (!event.target.closest("[data-leave-menu]")) {
+        setOpenMenuId(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsideClick);
+    return () => document.removeEventListener("pointerdown", handleOutsideClick);
+  }, []);
+
+  function handleViewDetails(application) {
+    setSelectedApplication(application);
+    setOpenMenuId(null);
+  }
+
   return (
     <section className="mt-8 overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
       <header className="flex items-center justify-between border-b border-violet-200 px-6 py-5">
@@ -159,91 +192,41 @@ function RecentApplications() {
         </Link>
       </header>
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-190 border-collapse text-left">
-          <thead>
-            <tr className="border-b border-violet-200 text-xs font-medium text-slate-600">
-              <th className="px-6 py-4">Type</th>
-              <th className="px-6 py-4">Range</th>
-              <th className="px-6 py-4">Days</th>
-              <th className="px-6 py-4">Applied Date</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Action</th>
-            </tr>
-          </thead>
+      <div role="table" aria-label="Recent leave applications">
+        <div
+          role="row"
+          className={`hidden border-b border-violet-200 bg-violet-50 px-6 py-4 text-xs tracking-wide text-slate-600 uppercase md:grid md:items-center md:gap-4 ${GRID_COLUMNS}`}
+        >
+          <span role="columnheader">Leave Type</span>
+          <span role="columnheader">Duration</span>
+          <span role="columnheader">Days</span>
+          <span role="columnheader">Applied On</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader" className="text-right">
+            Actions
+          </span>
+        </div>
 
-          <tbody>
-            {recentApplications.map((application) => (
-              <tr key={application.id} className="border-b border-violet-100 text-sm last:border-b-0">
-                <td className="px-6 py-4 font-medium text-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${application.dotClass}`} />
-                    {application.type}
-                  </div>
-                </td>
-
-                <td className="px-6 py-4 text-slate-800">{application.range}</td>
-
-                <td className="px-6 py-4 text-slate-800">{application.days}</td>
-
-                <td className="px-6 py-4 text-slate-600">{application.appliedDate}</td>
-
-                <td className="px-6 py-4">
-                  <StatusBadge className={application.status === "Approved" ? "bg-emerald-100 text-emerald-700" : application.status == "Pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"} status={application.status} />
-                </td>
-
-                <td className="px-6 py-4 text-right">
-                  <button
-                    type="button"
-                    aria-label={`Actions for ${application.type}`}
-                    className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-                  >
-                    <EllipsisVertical className="size-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="divide-y divide-violet-100">
+          {recentApplications.map((application, index) => (
+            <ApplicationItem
+              key={application.id}
+              application={application}
+              isMenuOpen={openMenuId === application.id}
+              openUpward={index === recentApplications.length - 1}
+              allowCancel={false}
+              onToggleMenu={() => setOpenMenuId((currentId) => (currentId === application.id ? null : application.id))}
+              onViewDetails={() => handleViewDetails(application)}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="divide-y divide-violet-100 md:hidden">
-        {recentApplications.map((application) => (
-          <article key={application.id} className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`size-2 rounded-full ${application.dotClass}`} />
-
-                  <h3 className="font-semibold text-slate-900">{application.type}</h3>
-                </div>
-
-                <p className="mt-2 text-sm text-slate-600">{application.range}</p>
-              </div>
-
-              <StatusBadge status={application.status} />
-            </div>
-
-            <div className="mt-4 flex justify-between text-sm text-slate-500">
-              <span>{application.days} day(s)</span>
-              <span>{application.appliedDate}</span>
-            </div>
-          </article>
-        ))}
-      </div>
+      {selectedApplication && (
+        <ApplicationDetailsDialog application={selectedApplication} allowCancel={false} onClose={() => setSelectedApplication(null)} />
+      )}
     </section>
   );
 }
-
-// function StatusBadge({ status }) {
-//   const statusClass =
-//     status === "Approved"
-//       ? "bg-green-100 text-green-700"
-//       : status === "Pending"
-//         ? "bg-orange-100 text-orange-700"
-//         : "bg-red-100 text-red-700";
-
-//   return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusClass}`}>{status}</span>;
-// }
 
 export default EmployeeDashboard;

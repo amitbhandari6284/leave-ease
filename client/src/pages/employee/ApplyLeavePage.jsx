@@ -7,8 +7,10 @@ import FormField from "../../features/employee/apply/components/FormField.jsx";
 import BalanceImpactCard from "../../features/employee/apply/components/BalanceImpactCard.jsx";
 import SelectedFile from "../../features/employee/apply/components/SelectedFile.jsx";
 import TeamAvailabilityCard from "../../features/employee/apply/components/TeamAvailabilityCard.jsx";
+import DateRangePicker from "../../components/ui/DateRangePicker.jsx";
 
 import { calculateWorkingDays, getTodayInputValue } from "../../lib/calculateWorkingDays.js";
+import { parseInputDate, toInputDateString } from "../../lib/calendarUtils.js";
 
 const leaveTypes = [
   {
@@ -82,6 +84,10 @@ function ApplyLeavePage() {
 
   const balancePercentage = selectedLeaveType?.currentBalance ? Math.min((selectedLeaveType.currentBalance / 20) * 100, 100) : 0;
 
+  const hasDateRangeError = Boolean(errors.startDate || errors.endDate);
+  const dateRangeTriggerClass = `flex h-12 w-full flex-col justify-center rounded-lg border bg-violet-50/40 px-4 text-left text-sm outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${hasDateRangeError ? "border-red-500" : "border-violet-200"
+    }`;
+
   async function onSubmit(formData) {
     setSuccessMessage("");
 
@@ -96,10 +102,19 @@ function ApplyLeavePage() {
       document: formData.document?.[0] ?? null,
     };
 
-    console.log("Leave request:", payload);
-
     setSuccessMessage("Your leave request has been submitted successfully.");
     reset();
+  }
+
+  function handleDateRangeChange({ startDate: newStartDate, endDate: newEndDate }) {
+    setValue("startDate", toInputDateString(newStartDate), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("endDate", toInputDateString(newEndDate), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   }
 
   function handleDrop(event) {
@@ -165,48 +180,44 @@ function ApplyLeavePage() {
             </select>
           </FormField>
 
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <FormField label="Start Date" htmlFor="startDate" error={errors.startDate?.message} required>
-              <input
-                id="startDate"
-                type="date"
-                min={getTodayInputValue()}
-                className={getInputClass(Boolean(errors.startDate))}
-                {...register("startDate", {
-                  required: "Start date is required",
-                  validate: (value) => value >= getTodayInputValue() || "Start date cannot be in the past",
-                  onChange: () => {
-                    if (getValues("endDate")) {
-                      setValue("endDate", getValues("endDate"), {
-                        shouldValidate: true,
-                      });
-                    }
-                  },
-                })}
-              />
-            </FormField>
+          <FormField
+            className="mt-6"
+            label="Leave Dates"
+            htmlFor="startDate"
+            error={errors.startDate?.message || errors.endDate?.message}
+            required
+          >
+            <DateRangePicker
+              startDate={parseInputDate(startDate)}
+              endDate={parseInputDate(endDate)}
+              onChange={handleDateRangeChange}
+              triggerClassName={dateRangeTriggerClass}
+            />
 
-            <FormField label="End Date" htmlFor="endDate" error={errors.endDate?.message} required>
-              <input
-                id="endDate"
-                type="date"
-                min={startDate || getTodayInputValue()}
-                className={getInputClass(Boolean(errors.endDate))}
-                {...register("endDate", {
-                  required: "End date is required",
-                  validate: (value) => {
-                    const selectedStartDate = getValues("startDate");
+            {/* Hidden fields so react-hook-form fully owns validation, dirty state, and reset() for these values */}
+            <input
+              type="hidden"
+              {...register("startDate", {
+                required: "Start date is required",
+                validate: (value) => value >= getTodayInputValue() || "Start date cannot be in the past",
+              })}
+            />
+            <input
+              type="hidden"
+              {...register("endDate", {
+                required: "End date is required",
+                validate: (value) => {
+                  const selectedStartDate = getValues("startDate");
 
-                    if (!selectedStartDate) {
-                      return "Select a start date first";
-                    }
+                  if (!selectedStartDate) {
+                    return "Select a start date first";
+                  }
 
-                    return value >= selectedStartDate || "End date cannot be before the start date";
-                  },
-                })}
-              />
-            </FormField>
-          </div>
+                  return value >= selectedStartDate || "End date cannot be before the start date";
+                },
+              })}
+            />
+          </FormField>
 
           <div className="mt-6 flex items-center justify-between rounded-lg border border-dashed border-violet-300 bg-violet-50/70 px-4 py-5">
             <span className="text-sm text-slate-600">Calculated Duration:</span>
