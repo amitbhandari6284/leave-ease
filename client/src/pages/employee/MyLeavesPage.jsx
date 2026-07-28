@@ -30,7 +30,7 @@ function MyLeavesPage() {
   const [message, setMessage] = useState("");
   const { data: leaveRequestsData, isLoading, isError, error } = useQuery({
     queryKey: ["leave-requests", "me"],
-    queryFn: getMyLeaveRequests,
+    queryFn: () => getMyLeaveRequests(),
   });
   const applications = useMemo(() => normalizeLeaveRequestsResponse(leaveRequestsData), [leaveRequestsData]);
   const cancelMutation = useMutation({

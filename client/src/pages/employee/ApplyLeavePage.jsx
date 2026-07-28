@@ -1,39 +1,20 @@
-import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, CheckCircle2, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router";
-import { CheckCircle2, Upload } from "lucide-react";
 
-import FormField from "../../features/employee/apply/components/FormField.jsx";
+import DateRangePicker from "../../components/ui/DateRangePicker.jsx";
 import BalanceImpactCard from "../../features/employee/apply/components/BalanceImpactCard.jsx";
+import FormField from "../../features/employee/apply/components/FormField.jsx";
+import PolicyHelpCard from "../../features/employee/apply/components/PolicyHelpCard.jsx";
 import SelectedFile from "../../features/employee/apply/components/SelectedFile.jsx";
 import TeamAvailabilityCard from "../../features/employee/apply/components/TeamAvailabilityCard.jsx";
-import DateRangePicker from "../../components/ui/DateRangePicker.jsx";
 
+import { createLeaveRequest, getLeaveTypes, getMyLeaveBalances } from "../../features/leave/lib/leaveApi.js";
 import { calculateWorkingDays, getTodayInputValue } from "../../lib/calculateWorkingDays.js";
 import { parseInputDate, toInputDateString } from "../../lib/calendarUtils.js";
-
-const leaveTypes = [
-  {
-    id: "casual",
-    name: "Casual Leave",
-    currentBalance: 4,
-  },
-  {
-    id: "sick",
-    name: "Sick Leave",
-    currentBalance: 6,
-  },
-  {
-    id: "earned",
-    name: "Earned Leave",
-    currentBalance: 15,
-  },
-  {
-    id: "unpaid",
-    name: "Unpaid Leave",
-    currentBalance: null,
-  },
-];
+import { normalizeLeaveBalancesResponse, normalizeLeaveTypesResponse } from "../../features/employee/apply/lib/helper.js";
 
 const allowedFileTypes = ["application/pdf", "image/png", "image/jpeg"];
 
@@ -41,69 +22,114 @@ const maxFileSize = 5 * 1024 * 1024;
 
 function ApplyLeavePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [successMessage, setSuccessMessage] = useState("");
+  const { register, handleSubmit, control, setValue, getValues, reset, setError, clearErrors, formState: { errors, isSubmitting }, } = useForm(
+    {
+      defaultValues: {
+        leaveType: "",
+        startDate: "",
+        endDate: "",
+        reason: "",
+        document: null,
+        isHalfDay: false,
+      },
+    });
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    getValues,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    defaultValues: {
-      leaveType: "",
-      startDate: "",
-      endDate: "",
-      reason: "",
-      document: null,
-    },
-  });
+  const { data: leaveTypesData, isLoading: isLoadingLeaveTypes, isError: isLeaveTypesError, error: leaveTypesError, } = useQuery(
+    {
+      queryKey: ["leave-types"],
+      queryFn: getLeaveTypes,
+    });
 
-  const selectedLeaveTypeId = watch("leaveType");
-  const startDate = watch("startDate");
-  const endDate = watch("endDate");
-  const selectedDocuments = watch("document");
+  const { data: balancesData, isLoading: isLoadingBalances, isError: isBalancesError, } = useQuery(
+    {
+      queryKey: ["leave-balances", "me"],
+      queryFn: getMyLeaveBalances,
+    });
+
+  const leaveTypes = useMemo(() => normalizeLeaveTypesResponse(leaveTypesData), [leaveTypesData]);
+  const leaveBalances = useMemo(() => normalizeLeaveBalancesResponse(balancesData), [balancesData]);
+
+  const selectedLeaveTypeId = useWatch({ control, name: "leaveType" });
+  const startDate = useWatch({ control, name: "startDate" });
+  const endDate = useWatch({ control, name: "endDate" });
+  const selectedDocuments = useWatch({ control, name: "document" });
 
   const selectedLeaveType = leaveTypes.find((leaveType) => leaveType.id === selectedLeaveTypeId);
+  const selectedBalance = leaveBalances.find((balance) => balance.leaveTypeId === selectedLeaveTypeId);
 
   const selectedFile = selectedDocuments?.[0] ?? null;
 
   const workingDays = useMemo(() => calculateWorkingDays(startDate, endDate), [startDate, endDate]);
 
-  const balanceAfterRequest = useMemo(() => {
-    if (selectedLeaveType?.currentBalance == null) {
-      return null;
+  const isSingleDaySelected = Boolean(startDate) && startDate === endDate;
+  const canRequestHalfDay = Boolean(selectedLeaveType?.allowHalfDay) && isSingleDaySelected;
+  const isHalfDay = useWatch({ control, name: "isHalfDay" });
+
+  // Half-day only makes sense for a single-day request on a leave type that
+  // supports it, so clear a stale selection if the leave type or date range
+  // changes underneath it.
+  useEffect(() => {
+    if (!canRequestHalfDay && isHalfDay) {
+      setValue("isHalfDay", false, { shouldDirty: true });
     }
+  }, [canRequestHalfDay, isHalfDay, setValue]);
 
-    return selectedLeaveType.currentBalance - workingDays;
-  }, [selectedLeaveType, workingDays]);
+  const requestedDays = canRequestHalfDay && isHalfDay ? 0.5 : workingDays;
 
-  const hasInsufficientBalance = selectedLeaveType?.currentBalance != null && workingDays > selectedLeaveType.currentBalance;
+  const isUnpaidLeaveType = selectedLeaveType?.isPaid === false;
+  const availableBalance = selectedBalance?.available ?? 0;
 
-  const balancePercentage = selectedLeaveType?.currentBalance ? Math.min((selectedLeaveType.currentBalance / 20) * 100, 100) : 0;
+  const balanceAfterRequest = useMemo(() => {
+    if (!selectedBalance || isUnpaidLeaveType) return null;
+
+    return availableBalance - requestedDays;
+  }, [selectedBalance, isUnpaidLeaveType, availableBalance, requestedDays]);
+
+  const hasInsufficientBalance =
+    !isUnpaidLeaveType && Boolean(selectedBalance) && requestedDays > 0 && requestedDays > availableBalance;
+
+  const balancePercentage = selectedBalance
+    ? Math.min((availableBalance / (selectedBalance.total || 20)) * 100, 100)
+    : 0;
 
   const hasDateRangeError = Boolean(errors.startDate || errors.endDate);
   const dateRangeTriggerClass = `flex h-12 w-full flex-col justify-center rounded-lg border bg-violet-50/40 px-4 text-left text-sm outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${hasDateRangeError ? "border-red-500" : "border-violet-200"
     }`;
 
+  const createMutation = useMutation({
+    mutationFn: createLeaveRequest,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["leave-balances", "me"] });
+
+      reset();
+      setSuccessMessage("Your leave request has been submitted successfully.");
+    },
+  });
+
   async function onSubmit(formData) {
     setSuccessMessage("");
+    clearErrors("root");
 
-    await new Promise((resolve) => setTimeout(resolve, 900));
-
-    const payload = {
-      leaveTypeId: formData.leaveType,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      workingDays,
-      reason: formData.reason.trim(),
-      document: formData.document?.[0] ?? null,
-    };
-
-    setSuccessMessage("Your leave request has been submitted successfully.");
-    reset();
+    try {
+      await createMutation.mutateAsync({
+        leaveType: formData.leaveType,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        isHalfDay: canRequestHalfDay ? Boolean(formData.isHalfDay) : false,
+        workingDays: requestedDays,
+        reason: formData.reason.trim(),
+        document: formData.document?.[0] ?? null,
+      });
+    } catch (error) {
+      setError("root", {
+        message:
+          error.response?.data?.message || "Unable to submit leave request. Please try again.",
+      });
+    }
   }
 
   function handleDateRangeChange({ startDate: newStartDate, endDate: newEndDate }) {
@@ -137,6 +163,8 @@ function ApplyLeavePage() {
     });
   }
 
+  const isSaving = isSubmitting || createMutation.isPending;
+
   return (
     <div className="mx-auto max-w-7xl">
       <header>
@@ -156,6 +184,23 @@ function ApplyLeavePage() {
         </div>
       )}
 
+      {errors.root && (
+        <div
+          role="alert"
+          className="mt-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700"
+        >
+          <AlertCircle className="mt-0.5 size-5 shrink-0" />
+
+          <p className="text-sm font-medium">{errors.root.message}</p>
+        </div>
+      )}
+
+      {isLeaveTypesError && (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {leaveTypesError?.response?.data?.message || "Unable to load leave types."}
+        </div>
+      )}
+
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_310px]">
         <form
           className="rounded-xl border border-violet-200 bg-white p-6 shadow-sm sm:p-7"
@@ -165,16 +210,20 @@ function ApplyLeavePage() {
           <FormField label="Leave Type" htmlFor="leaveType" error={errors.leaveType?.message} required>
             <select
               id="leaveType"
+              disabled={isLoadingLeaveTypes}
               className={getInputClass(Boolean(errors.leaveType))}
               {...register("leaveType", {
                 required: "Select a leave type",
               })}
             >
-              <option value="">Select a leave type</option>
+              <option value="">
+                {isLoadingLeaveTypes ? "Loading leave types..." : "Select a leave type"}
+              </option>
 
               {leaveTypes.map((leaveType) => (
                 <option key={leaveType.id} value={leaveType.id}>
                   {leaveType.name}
+                  {leaveType.isPaid === false ? " - Unpaid" : ""}
                 </option>
               ))}
             </select>
@@ -223,25 +272,57 @@ function ApplyLeavePage() {
             <span className="text-sm text-slate-600">Calculated Duration:</span>
 
             <strong className="text-xl text-indigo-600">
-              {startDate && endDate ? workingDays : "--"} {workingDays === 1 ? "Day" : "Days"}
+              {startDate && endDate
+                ? requestedDays === 0.5
+                  ? "Half Day"
+                  : `${requestedDays} ${requestedDays === 1 ? "Day" : "Days"}`
+                : "--"}
             </strong>
           </div>
+
+          {selectedLeaveType?.allowHalfDay && (
+            <div className="mt-4 flex items-start gap-3 rounded-lg border border-violet-200 bg-violet-50/40 px-4 py-3">
+              <input
+                id="isHalfDay"
+                type="checkbox"
+                disabled={!isSingleDaySelected}
+                className="mt-0.5 size-4 rounded border-violet-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                {...register("isHalfDay")}
+              />
+
+              <label htmlFor="isHalfDay" className="text-sm text-slate-700">
+                <span className="font-semibold text-slate-900">Request as half day</span>
+                <br />
+                {isSingleDaySelected
+                  ? "This leave type allows half-day requests for a single day."
+                  : "Half-day requests are only available when start and end date are the same."}
+              </label>
+            </div>
+          )}
 
           {startDate && endDate && workingDays === 0 && (
             <p className="mt-2 text-sm text-amber-700">The selected range contains no working days.</p>
           )}
 
           {hasInsufficientBalance && (
-            <p className="mt-2 text-sm text-red-600">Your request exceeds the available leave balance.</p>
+            <p className="mt-2 text-sm text-red-600">
+              This request exceeds your currently available balance. HR may reject it or ask you to choose
+              unpaid leave.
+            </p>
           )}
 
-          <FormField className="mt-6" label="Reason" htmlFor="reason" error={errors.reason?.message} optional>
+          <FormField className="mt-6" label="Reason" htmlFor="reason" error={errors.reason?.message} required>
             <textarea
               id="reason"
               rows="4"
               placeholder="Briefly describe the reason for your leave..."
               className={`${getInputClass(Boolean(errors.reason))} min-h-28 resize-y py-3`}
               {...register("reason", {
+                required: "Reason is required",
+                minLength: {
+                  value: 10,
+                  message: "Reason must be at least 10 characters",
+                },
                 maxLength: {
                   value: 500,
                   message: "Reason cannot exceed 500 characters",
@@ -250,7 +331,14 @@ function ApplyLeavePage() {
             />
           </FormField>
 
-          <FormField className="mt-6" label="Supporting Document" htmlFor="document" error={errors.document?.message} optional>
+          <FormField
+            className="mt-6"
+            label="Supporting Document"
+            htmlFor="document"
+            error={errors.document?.message}
+            optional={!selectedLeaveType?.requiresDocument}
+            required={Boolean(selectedLeaveType?.requiresDocument)}
+          >
             <div
               className="rounded-lg border-2 border-dashed border-violet-300 bg-violet-50/40 px-5 py-7 text-center transition hover:border-indigo-400"
               onDragOver={(event) => event.preventDefault()}
@@ -284,7 +372,16 @@ function ApplyLeavePage() {
                   validate: (files) => {
                     const file = files?.[0];
 
-                    if (!file) return true;
+                    if (!file) {
+                      const currentLeaveTypeId = getValues("leaveType");
+                      const currentLeaveType = leaveTypes.find((leaveType) => leaveType.id === currentLeaveTypeId);
+
+                      if (currentLeaveType?.requiresDocument) {
+                        return "This leave type requires a supporting document";
+                      }
+
+                      return true;
+                    }
 
                     if (!allowedFileTypes.includes(file.type)) {
                       return "Upload a PNG, JPG, JPEG, or PDF file";
@@ -312,10 +409,10 @@ function ApplyLeavePage() {
 
             <button
               type="submit"
-              disabled={isSubmitting || hasInsufficientBalance || workingDays === 0}
+              disabled={isSaving || isLoadingLeaveTypes || hasInsufficientBalance || requestedDays === 0}
               className="h-11 rounded-lg bg-teal-700 px-6 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSubmitting ? "Submitting..." : "Submit Request"}
+              {isSaving ? "Submitting..." : "Submit Request"}
             </button>
           </div>
         </form>
@@ -323,12 +420,19 @@ function ApplyLeavePage() {
         <aside className="space-y-6">
           <BalanceImpactCard
             selectedLeaveType={selectedLeaveType}
-            workingDays={workingDays}
+            selectedBalance={selectedBalance}
+            workingDays={requestedDays}
+            availableBalance={availableBalance}
             balanceAfterRequest={balanceAfterRequest}
             balancePercentage={balancePercentage}
+            hasInsufficientBalance={hasInsufficientBalance}
+            isLoadingBalances={isLoadingBalances}
+            isBalancesError={isBalancesError}
           />
 
-          <TeamAvailabilityCard startDate={startDate} endDate={endDate} workingDays={workingDays} />
+          <PolicyHelpCard selectedLeaveType={selectedLeaveType} />
+
+          <TeamAvailabilityCard startDate={startDate} endDate={endDate} workingDays={requestedDays} />
         </aside>
       </div>
     </div>
@@ -336,7 +440,7 @@ function ApplyLeavePage() {
 }
 
 function getInputClass(hasError) {
-  return `h-12 w-full rounded-lg border bg-violet-50/40 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 ${hasError ? "border-red-500" : "border-violet-200"
+  return `h-12 w-full rounded-lg border bg-violet-50/40 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60 ${hasError ? "border-red-500" : "border-violet-200"
     }`;
 }
 

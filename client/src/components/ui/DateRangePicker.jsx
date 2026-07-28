@@ -6,17 +6,24 @@ import { addMonths, formatShortDate, startOfToday } from "../../lib/calendarUtil
 const DEFAULT_TRIGGER_CLASS =
   "flex shrink-0 flex-col items-start rounded-xl px-3 py-2.5 text-left whitespace-nowrap transition hover:bg-slate-50 sm:rounded-full sm:px-6 sm:py-3";
 
-function DateRangePicker({ startDate, endDate, onChange, triggerClassName }) {
+function toValidDate(value) {
+  return value instanceof Date && !Number.isNaN(value.getTime()) ? value : null;
+}
+
+function DateRangePicker({ startDate, endDate, onChange, triggerClassName, minDate = startOfToday() }) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredDate, setHoveredDate] = useState(null);
   const [visibleMonth, setVisibleMonth] = useState(() => {
-    const today = startOfToday();
-    return { year: today.getFullYear(), month: today.getMonth() };
+    const anchorDate = toValidDate(startDate) ?? toValidDate(minDate) ?? startOfToday();
+    return { year: anchorDate.getFullYear(), month: anchorDate.getMonth() };
   });
 
   const containerRef = useRef(null);
-  const today = startOfToday();
   const nextMonth = addMonths(visibleMonth.year, visibleMonth.month, 1);
+
+  function handleJumpToMonth(year, month) {
+    setVisibleMonth({ year, month });
+  }
 
   useEffect(() => {
     function handleOutsideClick(event) {
@@ -28,6 +35,17 @@ function DateRangePicker({ startDate, endDate, onChange, triggerClassName }) {
     document.addEventListener("pointerdown", handleOutsideClick);
     return () => document.removeEventListener("pointerdown", handleOutsideClick);
   }, []);
+
+  // Whenever the selected range is cleared (either from this component's own
+  // "Clear dates" button, or from a parent resetting its filters), snap the
+  // visible month back to the anchor date instead of leaving it wherever the
+  // user last navigated to.
+  useEffect(() => {
+    if (toValidDate(startDate) || toValidDate(endDate)) return;
+
+    const resetAnchor = toValidDate(minDate) ?? startOfToday();
+    setVisibleMonth({ year: resetAnchor.getFullYear(), month: resetAnchor.getMonth() });
+  }, [startDate, endDate]);
 
   function handleSelectDate(date) {
     const isRangeAlreadyComplete = startDate && endDate;
@@ -71,10 +89,11 @@ function DateRangePicker({ startDate, endDate, onChange, triggerClassName }) {
               startDate={startDate}
               endDate={endDate}
               hoveredDate={hoveredDate}
-              minDate={today}
+              minDate={minDate}
               onSelectDate={handleSelectDate}
               onHoverDate={setHoveredDate}
               onPrevMonth={() => setVisibleMonth((current) => addMonths(current.year, current.month, -1))}
+              onJumpToMonth={handleJumpToMonth}
             />
             <MonthCalendar
               year={nextMonth.year}
@@ -82,7 +101,7 @@ function DateRangePicker({ startDate, endDate, onChange, triggerClassName }) {
               startDate={startDate}
               endDate={endDate}
               hoveredDate={hoveredDate}
-              minDate={today}
+              minDate={minDate}
               onSelectDate={handleSelectDate}
               onHoverDate={setHoveredDate}
               onNextMonth={() => setVisibleMonth((current) => addMonths(current.year, current.month, 1))}

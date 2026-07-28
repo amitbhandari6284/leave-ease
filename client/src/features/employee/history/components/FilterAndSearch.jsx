@@ -2,6 +2,7 @@ import { ChevronDown, X } from "lucide-react";
 import { useMemo } from "react";
 
 import DateRangePicker from "../../../../components/ui/DateRangePicker.jsx";
+import { parseInputDate, toInputDateString } from "../../../../lib/calendarUtils.js";
 
 export default function FilterAndSearch({ applications, filters, onUpdateFilter, onClearFilters }) {
   const leaveTypes = useMemo(() => [...new Set(applications.map((application) => application.type))], [applications]);
@@ -63,12 +64,13 @@ export default function FilterAndSearch({ applications, filters, onUpdateFilter,
         </div>
 
         <DateRangePicker
-          startDate={filters.startDate}
-          endDate={filters.endDate}
+          startDate={parseInputDate(filters.startDate)}
+          endDate={parseInputDate(filters.endDate)}
           onChange={({ startDate, endDate }) => {
-            onUpdateFilter("startDate", startDate);
-            onUpdateFilter("endDate", endDate);
+            onUpdateFilter("startDate", toInputDateString(startDate));
+            onUpdateFilter("endDate", toInputDateString(endDate));
           }}
+          minDate={null}
         />
       </div>
 
