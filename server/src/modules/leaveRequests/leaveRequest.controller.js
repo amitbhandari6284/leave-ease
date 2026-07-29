@@ -582,7 +582,7 @@ export async function cancelLeaveRequest(req, res, next) {
 
 export async function getReviewQueue(req, res, next) {
   try {
-    const { status = LEAVE_STATUSES.PENDING, department, leaveType, year, page = "1", limit = "10" } = req.query;
+    const { status, department, leaveType, year, page = "1", limit = "10" } = req.query;
 
     const parsedPage = Number(page);
     const parsedLimit = Number(limit);
@@ -593,15 +593,14 @@ export async function getReviewQueue(req, res, next) {
     if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50)
       throw new AppError("Limit must be between 1 and 50", 400, "INVALID_PAGINATION_LIMIT");
 
-    const normalizedStatus = status.trim().toUpperCase();
+    const filter = {};
 
-    if (!LEAVE_STATUS_VALUES.includes(normalizedStatus))
-      throw new AppError(`Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`, 400, "INVALID_STATUS_FILTER");
-
-    const filter = {
-      status: normalizedStatus,
-    };
-
+    if (status) {
+      const normalizedStatus = status.trim().toUpperCase();
+      if (!LEAVE_STATUS_VALUES.includes(normalizedStatus))
+        throw new AppError(`Status must be one of: ${LEAVE_STATUS_VALUES.join(", ")}`, 400, "INVALID_STATUS_FILTER");
+      filter.status = normalizedStatus;
+    }
     /*
       HR Managers can only see requests from departments
       where they are assigned as the manager.
@@ -673,7 +672,7 @@ export async function getReviewQueue(req, res, next) {
     return res.status(200).json({
       success: true,
       filters: {
-        status: normalizedStatus,
+        status: status ? status.trim().toUpperCase() : null,
         department: req.user.role === USER_ROLES.ADMIN ? department || null : "MANAGED_DEPARTMENTS",
         leaveType: leaveType || null,
         year: year ? Number(year) : null,
@@ -777,16 +776,16 @@ export async function decideLeaveRequest(req, res, next) {
       const balanceUpdate =
         decision === LEAVE_STATUSES.APPROVED
           ? {
-              $inc: {
-                pending: -existingRequest.workingDays,
-                used: existingRequest.workingDays,
-              },
-            }
+            $inc: {
+              pending: -existingRequest.workingDays,
+              used: existingRequest.workingDays,
+            },
+          }
           : {
-              $inc: {
-                pending: -existingRequest.workingDays,
-              },
-            };
+            $inc: {
+              pending: -existingRequest.workingDays,
+            },
+          };
       updatedBalance = await LeaveBalance.findOneAndUpdate(
         {
           user: existingRequest.employee,
