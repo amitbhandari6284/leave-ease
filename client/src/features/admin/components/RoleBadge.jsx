@@ -1,15 +1,18 @@
-export default function RoleBadge({ role }) {
-  const roleClass = {
-    Admin: "bg-red-100 text-red-700",
-    HR: "bg-indigo-100 text-indigo-700",
-    Employee: "bg-slate-100 text-slate-700",
-  };
+import { formatRoleLabel } from "../lib/helper";
 
+const ROLE_CLASSES = {
+  ADMIN: "bg-red-100 text-red-700",
+  HR: "bg-amber-100 text-amber-700",
+  EMPLOYEE: "bg-indigo-100 text-indigo-700",
+};
+
+export default function RoleBadge({ role }) {
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${roleClass[role]}`}
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${ROLE_CLASSES[role] ?? "bg-slate-100 text-slate-700"
+        }`}
     >
-      {role}
+      {formatRoleLabel(role)}
     </span>
   );
 }

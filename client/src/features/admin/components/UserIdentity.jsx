@@ -19,10 +19,10 @@ export default function UserIdentity({ user }) {
   );
 }
 
-// this is also for testing prpose
-function getInitials(name) {
+function getInitials(name = "") {
   return name
     .split(" ")
+    .filter(Boolean)
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
