@@ -21,19 +21,19 @@ const employeeLinks = [
     label: "Dashboard",
     to: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["EMPLOYEE", "HR"],
+    roles: ["EMPLOYEE", "HR_MANAGER"],
   },
   {
     label: "My Leaves",
     to: "/my-leaves",
     icon: FileText,
-    roles: ["EMPLOYEE", "HR"],
+    roles: ["EMPLOYEE", "HR_MANAGER"],
   },
   {
     label: "Apply Leave",
     to: "/apply-leave",
     icon: PlusCircle,
-    roles: ["EMPLOYEE", "HR"],
+    roles: ["EMPLOYEE", "HR_MANAGER"],
   },
 ];
 
@@ -42,19 +42,19 @@ const hrLinks = [
     label: "HR Dashboard",
     to: "/hr/dashboard",
     icon: LayoutDashboard,
-    roles: ["HR"],
+    roles: ["HR_MANAGER"],
   },
   {
     label: "Leave Requests",
     to: "/pending-requests",
     icon: ClipboardClock,
-    roles: ["HR"],
+    roles: ["HR_MANAGER"],
   },
   {
     label: "Department Calendar",
     to: "/calendar",
     icon: CalendarDays,
-    roles: ["HR"],
+    roles: ["HR_MANAGER"],
   },
 ];
 
@@ -97,7 +97,7 @@ function Sidebar({ isOpen, onClose }) {
   const visibleHrLinks = getVisibleLinks(hrLinks, user?.role);
   const visibleAdminLinks = getVisibleLinks(adminLinks, user?.role);
 
-  const canApplyForLeave = ["EMPLOYEE", "HR"].includes(user?.role);
+  const canApplyForLeave = ["EMPLOYEE", "HR_MANAGER"].includes(user?.role);
 
   return (
     <aside

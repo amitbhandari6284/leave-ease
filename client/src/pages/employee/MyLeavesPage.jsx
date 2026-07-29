@@ -12,7 +12,6 @@ import { normalizeLeaveRequestsResponse } from "../../features/employee/history/
 import { applicationMatchesFilters } from "../../features/employee/history/lib/applicationFilters.js";
 import Applications from "../../features/employee/history/components/Applications.jsx";
 
-
 const DEFAULT_FILTERS = {
   search: "",
   status: "All",
@@ -21,6 +20,8 @@ const DEFAULT_FILTERS = {
   endDate: "",
 };
 
+const PAGE_SIZE = 10;
+
 function MyLeavesPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -28,11 +29,28 @@ function MyLeavesPage() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [message, setMessage] = useState("");
+
+  const hasActiveFilters =
+    filters.search.trim() !== "" ||
+    filters.status !== "All" ||
+    filters.type !== "All" ||
+    filters.startDate !== "" ||
+    filters.endDate !== "";
+
+  const [previousFilters, setPreviousFilters] = useState(filters);
+  if (filters !== previousFilters) {
+    setPreviousFilters(filters);
+    setCurrentPage(1);
+  }
+
   const { data: leaveRequestsData, isLoading, isError, error } = useQuery({
-    queryKey: ["leave-requests", "me"],
-    queryFn: () => getMyLeaveRequests(),
+    queryKey: ["leave-requests", "me", currentPage],
+    queryFn: () => getMyLeaveRequests({ page: currentPage, limit: PAGE_SIZE }),
   });
+
   const applications = useMemo(() => normalizeLeaveRequestsResponse(leaveRequestsData), [leaveRequestsData]);
+  const pagination = leaveRequestsData?.pagination;
+
   const cancelMutation = useMutation({
     mutationFn: ({ leaveRequestId, reason }) => cancelLeaveRequest(leaveRequestId, reason),
     onSuccess: () => {
@@ -45,10 +63,16 @@ function MyLeavesPage() {
       setMessage(mutationError?.response?.data?.message || "Unable to cancel leave request.");
     },
   });
+
+  // Note: filters only apply to requests already on the current page,
+  // since the backend doesn't yet support free-text search or date-range
+  // filters as query params. Status/leaveType could be moved server-side
+  // later since the backend already accepts them.
   const filteredApplications = useMemo(
     () => applications.filter((application) => applicationMatchesFilters(application, filters)),
     [applications, filters],
   );
+
   const statusCounts = useMemo(() => {
     return applications.reduce(
       (counts, application) => {
@@ -58,21 +82,12 @@ function MyLeavesPage() {
       { Pending: 0, Approved: 0, Cancelled: 0 },
     );
   }, [applications]);
-  const [previousFilters, setPreviousFilters] = useState(filters);
-
-  // Reset to page 1 whenever the active filters change. Comparing during
-  // render (rather than in a useEffect) avoids an extra cascading render.
-  if (filters !== previousFilters) {
-    setPreviousFilters(filters);
-    setCurrentPage(1);
-  }
 
   function handleViewDetails(application) {
     setSelectedApplication(application);
     setOpenMenuId(null);
   }
 
-  // Close the open row menu on any click outside of it.
   useEffect(() => {
     function handleOutsideClick(event) {
       if (!event.target.closest("[data-leave-menu]")) {
@@ -184,6 +199,8 @@ function MyLeavesPage() {
       <FilterAndSearch applications={applications} filters={filters} onUpdateFilter={hanldeUpdateFilter} onClearFilters={handleClearFilters} />
       <Applications
         filteredApplications={filteredApplications}
+        hasActiveFilters={hasActiveFilters}
+        pagination={pagination}
         openMenuId={openMenuId}
         currentPage={currentPage}
         handleViewDetails={handleViewDetails}

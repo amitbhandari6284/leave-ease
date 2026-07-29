@@ -26,13 +26,13 @@ function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route element={<ProtectedRoute allowedRoles={["EMPLOYEE", "HR"]} />}>
+            <Route element={<ProtectedRoute allowedRoles={["EMPLOYEE", "HR_MANAGER"]} />}>
               <Route path="/dashboard" element={<EmployeeDashboard />} />
               <Route path="/my-leaves" element={<MyLeavesPage />} />
               <Route path="/apply-leave" element={<ApplyLeavePage />} />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRoles={["HR", "ADMIN"]} />}>
+            <Route element={<ProtectedRoute allowedRoles={["HR_MANAGER", "ADMIN"]} />}>
               <Route path="/hr/dashboard" element={<HrDashboard />} />
               <Route path="/calendar" element={<DepartmentCalendarPage />} />
               <Route path="/pending-requests" element={<PendingRequestsPage />} />

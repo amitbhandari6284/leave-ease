@@ -1,111 +1,110 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock3, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import { initialLeaveRequests } from "../../data/hrRequests";
-import RequestRow from "../../features/hr/components/RequestRow.jsx";
-import RequestCard from "../../features/hr/components/RequestCard.jsx";
-import ReviewRequestDrawer from "../../features/hr/components/ReviewRequestDrawer.jsx";
-import SummaryCard from "../../components/ui/SummaryCard.jsx";
 import EmptyState from "../../components/ui/EmptyState.jsx";
+import SummaryCard from "../../components/ui/SummaryCard.jsx";
+import Pagination from "../../components/ui/Pagination.jsx";
+import Requests from "../../features/hr/components/Requests.jsx";
+import ReviewRequestDrawer from "../../features/hr/components/ReviewRequestDrawer.jsx";
+import { normalizeReviewQueueResponse } from "../../features/hr/lib/normalize.js";
+import { decideLeaveRequest, getReviewQueue } from "../../features/leave/lib/leaveApi.js";
+
+const STATUS_TABS = ["All", "Pending", "Approved", "Rejected", "Cancelled"];
+const PAGE_SIZE = 10;
 
 function PendingRequestsPage() {
   const { requestId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [requests, setRequests] = useState(initialLeaveRequests);
   const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("All");
-  const [leaveTypeFilter, setLeaveTypeFilter] = useState("All");
-  const [message, setMessage] = useState("");
   const [statusTab, setStatusTab] = useState("All");
+  const [page, setPage] = useState(1);
+  const [message, setMessage] = useState("");
 
-  const pendingRequests = requests.filter(
-    (request) => request.status === "Pending",
-  );
-  const selectedRequest = requests.find((request) => request.id === requestId);
-  const departments = [...new Set(pendingRequests.map((request) => request.department))];
-  const leaveTypes = [...new Set(pendingRequests.map((request) => request.leaveType))];
+  const [previousStatusTab, setPreviousStatusTab] = useState(statusTab);
+  if (statusTab !== previousStatusTab) {
+    setPreviousStatusTab(statusTab);
+    setPage(1);
+  }
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["leave-requests", "review-queue", statusTab, page],
+    queryFn: () =>
+      getReviewQueue({
+        ...(statusTab !== "All" && { status: statusTab }),
+        page,
+        limit: PAGE_SIZE,
+      }),
+  });
+
+  const requests = useMemo(() => normalizeReviewQueueResponse(data), [data]);
+  const pagination = data?.pagination;
+
+  const decisionMutation = useMutation({
+    mutationFn: ({ leaveRequestId, payload }) => decideLeaveRequest(leaveRequestId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests", "review-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["leave-requests", "me"] });
+    },
+  });
+
+  const selectedRequest = requests.find((r) => r.id === requestId);
+  const pendingCountOnPage = requests.filter((r) => r.status === "Pending").length;
+  const requiresAttention = requests.filter((r) => r.status === "Pending" && (r.conflicts.length > 0 || r.hasDocument)).length;
+
+  // Note: search only filters requests already on the current page,
+  // since free-text search isn't supported by the backend yet.
   const filteredRequests = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    return requests.filter((request) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        request.employee.toLowerCase().includes(normalizedSearch) ||
-        request.department.toLowerCase().includes(normalizedSearch) ||
-        request.leaveType.toLowerCase().includes(normalizedSearch);
-
-      const matchesDepartment = departmentFilter === "All" || request.department === departmentFilter;
-      const matchesLeaveType = leaveTypeFilter === "All" || request.leaveType === leaveTypeFilter;
-      const matchesStatusTab = statusTab === "All" || request.status === statusTab;
-
-      return (
-        matchesSearch &&
-        matchesDepartment &&
-        matchesLeaveType &&
-        matchesStatusTab
-      );
-    });
-  }, [requests, searchTerm, departmentFilter, leaveTypeFilter, statusTab]);
-
-  const requiresAttention = pendingRequests.filter((request) => request.conflicts.length > 0 || request.hasDocument).length;
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return requests;
+    return requests.filter((r) =>
+      [r.employee, r.department, r.leaveType, r.status].some((field) => field.toLowerCase().includes(search)),
+    );
+  }, [requests, searchTerm]);
 
   useEffect(() => {
     if (!requestId) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => { document.body.style.overflow = ""; };
   }, [requestId]);
 
   function closeDrawer() {
     navigate("/pending-requests");
   }
-  // it's bad tell me about
-  function approveRequest(id) {
-    setRequests((currentRequests) =>
-      currentRequests.map((request) => (request.id === id ? { ...request, status: "Approved" } : request)),
-    );
 
-    setMessage("Leave request approved successfully.");
-    closeDrawer();
+  async function decide(id, decision, remark) {
+    const verb = decision === "APPROVED" ? "approved" : "rejected";
+    try {
+      await decisionMutation.mutateAsync({ leaveRequestId: id, payload: { decision, remark } });
+      setMessage(`Leave request ${verb} successfully.`);
+      closeDrawer();
+    } catch (err) {
+      setMessage(err.response?.data?.message || `Unable to ${decision === "APPROVED" ? "approve" : "reject"} leave request.`);
+    }
   }
 
-  function rejectRequest(id, remarks) {
-    setRequests((currentRequests) =>
-      currentRequests.map((request) =>
-        request.id === id
-          ? {
-            ...request,
-            status: "Rejected",
-            decisionRemarks: remarks,
-          }
-          : request,
-      ),
-    );
+  const approveRequest = (id) => decide(id, "APPROVED", "Approved by HR.");
+  const rejectRequest = (id, remarks) => decide(id, "REJECTED", remarks);
 
-    setMessage("Leave request rejected successfully.");
-    closeDrawer();
-  }
+  if (isLoading) return <StatusPanel text="Loading leave requests..." />;
+  if (isError) return <StatusPanel text={error?.response?.data?.message || "Unable to load leave requests."} isError />;
 
   return (
     <div className="mx-auto max-w-7xl">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Leave Requests </h1>
-        <p className="mt-1 text-slate-500"> Review pending applications and view approved, rejected, or cancelled history. </p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Leave Requests</h1>
+        <p className="mt-1 text-slate-500">
+          Review pending applications and view approved, rejected, or cancelled history.
+        </p>
       </header>
 
       {message && (
         <div className="mt-6 flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
           <span>{message}</span>
-
-          <button type="button" className="font-semibold" onClick={() => setMessage("")}>
-            Dismiss
-          </button>
+          <button type="button" className="font-semibold" onClick={() => setMessage("")}>Dismiss</button>
         </div>
       )}
 
@@ -113,10 +112,10 @@ function PendingRequestsPage() {
         <SummaryCard>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-600">Total Pending</p>
-              <p className="mt-4 text-4xl font-bold text-slate-950">{pendingRequests.length}</p>
+              <p className="text-sm font-semibold text-slate-600">Pending (this page)</p>
+              <p className="mt-4 text-4xl font-bold text-slate-950">{pendingCountOnPage}</p>
             </div>
-            <div className={`flex size-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600`}>
+            <div className="flex size-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
               <Clock3 className="size-5" />
             </div>
           </div>
@@ -128,7 +127,7 @@ function PendingRequestsPage() {
               <p className="text-sm font-semibold text-slate-600">Requires Attention</p>
               <p className="mt-4 text-4xl font-bold text-slate-950">{requiresAttention}</p>
             </div>
-            <div className={`flex size-11 items-center justify-center rounded-full  bg-amber-100 text-amber-700`}>
+            <div className="flex size-11 items-center justify-center rounded-full bg-amber-100 text-amber-700">
               <AlertTriangle className="size-5" />
             </div>
           </div>
@@ -136,57 +135,24 @@ function PendingRequestsPage() {
       </section>
 
       <section className="mt-6 rounded-xl border border-violet-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
-          <div className="relative md:col-span-2 xl:col-span-6">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
-
-            <input
-              type="search"
-              value={searchTerm}
-              placeholder="Search employees or requests..."
-              className={inputClass}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </div>
-
-          <select
-            value={departmentFilter}
-            className={`${selectClass} xl:col-span-3`}
-            onChange={(event) => setDepartmentFilter(event.target.value)}
-          >
-            <option value="All">All Departments</option>
-
-            {departments.map((department) => (
-              <option key={department} value={department}>
-                {department}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={leaveTypeFilter}
-            className={`${selectClass} xl:col-span-3`}
-            onChange={(event) => setLeaveTypeFilter(event.target.value)}
-          >
-            <option value="All">All Leave Types</option>
-
-            {leaveTypes.map((leaveType) => (
-              <option key={leaveType} value={leaveType}>
-                {leaveType}
-              </option>
-            ))}
-          </select>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            placeholder="Search this page (employee, department, leave type, status)..."
+            className={inputClass}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </section>
 
       <section className="mt-6 flex flex-wrap gap-2">
-        {["All", "Pending", "Approved", "Rejected", "Cancelled"].map((status) => (
+        {STATUS_TABS.map((status) => (
           <button
             key={status}
             type="button"
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${statusTab === status
-              ? "bg-indigo-600 text-white"
-              : "border border-violet-200 bg-white text-slate-600 hover:bg-violet-50"
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${statusTab === status ? "bg-indigo-600 text-white" : "border border-violet-200 bg-white text-slate-600 hover:bg-violet-50"
               }`}
             onClick={() => setStatusTab(status)}
           >
@@ -197,47 +163,44 @@ function PendingRequestsPage() {
 
       <section className="mt-6 overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
         <header className="border-b border-violet-200 px-6 py-5">
-          <h2 className="text-xl font-bold text-slate-950"> Request Records </h2>
-          <p className="mt-1 text-sm text-slate-500"> Pending requests can be reviewed. Completed requests are available for history. </p>
+          <h2 className="text-xl font-bold text-slate-950">Request Records</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Pending requests can be reviewed. Completed requests are available for history.
+          </p>
         </header>
 
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-262.5 table-fixed border-collapse text-left">
-            <colgroup>
-              <col className="w-[24%]" />
-              <col className="w-[15%]" />
-              <col className="w-[25%]" />
-              <col className="w-[13%]" />
-              <col className="w-[11%]" />
-              <col className="w-[12%]" />
-            </colgroup>
-            <thead>
-              <tr className="border-b border-violet-200 bg-violet-50 text-xs uppercase tracking-wide text-slate-600">
-                <th className="whitespace-nowrap pl-14 py-4 font-semibold">Employee</th>
-                <th className="whitespace-nowrap px-6 py-4 font-semibold">Leave Type</th>
-                <th className="whitespace-nowrap px-6 py-4 font-semibold">Duration</th>
-                <th className="whitespace-nowrap px-6 py-4 font-semibold">Submitted</th>
-                <th className="whitespace-nowrap px-6 py-4 font-semibold">Status</th>
-                <th className="whitespace-nowrap pr-14 py-4 text-right font-semibold">Action</th>
-              </tr>
-            </thead>
+        <div role="table" className="w-full">
+          <div
+            role="row"
+            className="hidden border-b border-violet-200 bg-violet-50 text-xs uppercase tracking-wide text-slate-600 md:grid md:grid-cols-[24%_15%_25%_13%_11%_12%] md:[&>div]:px-6 md:[&>div]:py-4"
+          >
+            <div role="columnheader" className="font-semibold">Employee</div>
+            <div role="columnheader" className="font-semibold">Leave Type</div>
+            <div role="columnheader" className="font-semibold">Duration</div>
+            <div role="columnheader" className="font-semibold">Submitted</div>
+            <div role="columnheader" className="font-semibold">Status</div>
+            <div role="columnheader" className="text-right font-semibold">Action</div>
+          </div>
 
-            <tbody>
-              {filteredRequests.map((request) => (
-                <RequestRow key={request.id} request={request} />
-              ))}
-            </tbody>
-          </table>
+          <div role="rowgroup" className="divide-y divide-violet-100">
+            {filteredRequests.map((request) => (
+              <Requests key={request.id} request={request} />
+            ))}
+          </div>
         </div>
 
-        <div className="divide-y divide-violet-100 md:hidden">
-          {filteredRequests.map((request) => (
-            <RequestCard key={request.id} request={request} />
-          ))}
-        </div>
+        {filteredRequests.length === 0 && (
+          <EmptyState title="No leave requests found" message="Try changing the selected filters or status tab." />
+        )}
 
-        {filteredRequests.length === 0 && <EmptyState title="No pending requests found"
-          message="Try changing the selected filters." />}
+        {pagination && pagination.totalPages > 1 && (
+          <footer className="flex items-center justify-between border-t border-violet-200 px-6 py-4">
+            <p className="text-sm text-slate-600">
+              Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalRequests} total)
+            </p>
+            <Pagination currentPage={pagination.currentPage} totalPages={pagination.totalPages} onPageChange={setPage} />
+          </footer>
+        )}
       </section>
 
       <ReviewRequestDrawer request={selectedRequest} onClose={closeDrawer} onApprove={approveRequest} onReject={rejectRequest} />
@@ -245,11 +208,17 @@ function PendingRequestsPage() {
   );
 }
 
+function StatusPanel({ text, isError }) {
+  return (
+    <div className="mx-auto max-w-7xl">
+      <div className={`rounded-xl border px-6 py-10 text-center shadow-sm ${isError ? "border-red-200 bg-red-50" : "border-violet-200 bg-white"}`}>
+        <p className={`text-sm font-semibold ${isError ? "text-red-700" : "text-slate-700"}`}>{text}</p>
+      </div>
+    </div>
+  );
+}
 
 const inputClass =
   "h-11 w-full rounded-lg border border-violet-200 bg-violet-50/40 pr-4 pl-10 text-sm outline-none focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100";
-
-const selectClass =
-  "h-11 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100";
 
 export default PendingRequestsPage;
