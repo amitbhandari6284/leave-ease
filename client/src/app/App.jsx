@@ -6,6 +6,7 @@ import ProtectedRoute from "../features/auth/components/ProtectedRoute";
 import PublicRoute from "../features/auth/components/PublicRoute";
 
 import AdminDashboard from "../pages/admin/AdminDashboard";
+import DepartmentManagementPage from "../pages/admin/DepartmentManagementPage";
 import PolicyManagementPage from "../pages/admin/PolicyManagementPage";
 import UserManagementPage from "../pages/admin/UserManagementPage";
 import LoginPage from "../pages/auth/LoginPage";
@@ -45,6 +46,7 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/users" element={<UserManagementPage />} />
+              <Route path="/departments" element={<DepartmentManagementPage />} />
               <Route path="/policies" element={<PolicyManagementPage />} />
               {/* <Route path="/reports" element={<PlaceholderPage />} /> */}
             </Route>

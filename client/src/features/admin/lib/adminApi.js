@@ -24,3 +24,18 @@ export async function getDepartments(params = {}) {
   const response = await apiClient.get("/departments", { params })
   return response.data
 }
+
+export async function createDepartment(payload) {
+  const response = await apiClient.post("/departments", payload)
+  return response.data
+}
+
+export async function updateDepartment(departmentId, payload) {
+  const response = await apiClient.patch(`/departments/${departmentId}`, payload)
+  return response.data
+}
+
+export async function updateDepartmentStatus(departmentId, isActive) {
+  const response = await apiClient.patch(`/departments/${departmentId}/status`, { isActive })
+  return response.data
+}

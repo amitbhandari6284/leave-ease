@@ -1,81 +1,106 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, ShieldCheck, UserPlus, UserRound, Users } from "lucide-react";
+import { Building2, PlusCircle, Search, UserRound } from "lucide-react";
 
 import SummaryCard from "../../components/ui/SummaryCard";
-import UserRow, { UserRowHeader } from "../../features/admin/components/users/UserRow";
-import UserModal from "../../features/admin/components/users/UserModal";
+import DepartmentRow, { DepartmentRowHeader } from "../../features/admin/components/departments/DepartmentRow";
+import DepartmentModal from "../../features/admin/components/departments/DepartmentModal";
 
-import { normalizeDepartmentsResponse, normalizeUsersResponse, runMutation } from "../../features/admin/lib/normalize.js"
-import { createUser, getDepartments, getUsers, updateUser, updateUserStatus } from "../../features/admin/lib/adminApi.js";
+import { createDepartment, getDepartments, getUsers, updateDepartment, updateDepartmentStatus } from "../../features/admin/lib/adminApi";
 
-function UserManagementPage() {
+async function runMutation(mutationPromise, fallbackMessage) {
+  try {
+    await mutationPromise;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || fallbackMessage, {
+      cause: error,
+    });
+  }
+}
+
+function DepartmentManagementPage() {
   const queryClient = useQueryClient();
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [openMenuId, setOpenMenuId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingDepartment, setEditingDepartment] = useState(null);
   const [message, setMessage] = useState("");
 
-  const { data: usersData, isLoading: isLoadingUsers, isError: isUsersError, error: usersError, } = useQuery(
-    {
-      queryKey: ["users"],
-      queryFn: () => getUsers({ limit: 50 }),
-    });
+  const {
+    data: departmentsData,
+    isLoading: isLoadingDepartments,
+    isError: isDepartmentsError,
+    error: departmentsError,
+  } = useQuery({
+    queryKey: ["departments", "all"],
+    queryFn: () => getDepartments({ includeInactive: true }),
+  });
 
-  const { data: departmentsData, isLoading: isLoadingDepartments, isError: isDepartmentsError, } = useQuery(
-    {
-      queryKey: ["departments", "all"],
-      queryFn: () => getDepartments({ includeInactive: true }),
-    });
+  const {
+    data: managersData,
+    isLoading: isLoadingManagers,
+  } = useQuery({
+    queryKey: ["users", "role", "HR_MANAGER"],
+    queryFn: () => getUsers({ role: "HR_MANAGER", limit: 50 }),
+  });
 
-  const users = useMemo(() => normalizeUsersResponse(usersData), [usersData]);
-  const departments = useMemo(() => normalizeDepartmentsResponse(departmentsData), [departmentsData],);
+  const departments = useMemo(
+    () => normalizeDepartmentsResponse(departmentsData),
+    [departmentsData],
+  );
 
-  const filteredUsers = useMemo(() => {
+  const managers = useMemo(
+    () => normalizeManagersResponse(managersData),
+    [managersData],
+  );
+
+  const filteredDepartments = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    return users.filter((user) => {
+
+    return departments.filter((department) => {
       const matchesSearch =
         !normalizedSearch ||
-        user.name.toLowerCase().includes(normalizedSearch) ||
-        user.email.toLowerCase().includes(normalizedSearch) ||
-        user.employeeId.toLowerCase().includes(normalizedSearch) ||
-        user.department.toLowerCase().includes(normalizedSearch);
-      const matchesRole = roleFilter === "All" || user.role === roleFilter;
+        department.name.toLowerCase().includes(normalizedSearch) ||
+        department.code.toLowerCase().includes(normalizedSearch) ||
+        department.managerName.toLowerCase().includes(normalizedSearch);
+
       const matchesStatus =
         statusFilter === "All" ||
-        (statusFilter === "Active" && user.isActive) ||
-        (statusFilter === "Inactive" && !user.isActive);
-      return matchesSearch && matchesRole && matchesStatus;
+        (statusFilter === "Active" && department.isActive) ||
+        (statusFilter === "Inactive" && !department.isActive);
+
+      return matchesSearch && matchesStatus;
     });
-  }, [users, searchTerm, roleFilter, statusFilter]);
+  }, [departments, searchTerm, statusFilter]);
 
   const createMutation = useMutation({
-    mutationFn: createUser,
+    mutationFn: createDepartment,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-      setMessage("User created successfully.");
+      queryClient.invalidateQueries({ queryKey: ["departments"] });
+      setMessage("Department created successfully.");
       closeModal();
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ userId, payload }) => updateUser(userId, payload),
+    mutationFn: ({ departmentId, payload }) =>
+      updateDepartment(departmentId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-      setMessage("User updated successfully.");
+      queryClient.invalidateQueries({ queryKey: ["departments"] });
+      setMessage("Department updated successfully.");
       closeModal();
     },
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ userId, isActive }) => updateUserStatus(userId, isActive),
+    mutationFn: ({ departmentId, isActive }) =>
+      updateDepartmentStatus(departmentId, isActive),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["departments"] });
       setOpenMenuId(null);
-      setMessage("User status updated.");
+      setMessage("Department status updated.");
     },
   });
 
@@ -85,131 +110,116 @@ function UserManagementPage() {
         setOpenMenuId(null);
       }
     }
+
     document.addEventListener("pointerdown", handleOutsideClick);
+
     return () => {
       document.removeEventListener("pointerdown", handleOutsideClick);
     };
   }, []);
 
   function openCreateModal() {
-    setEditingUser(null);
+    setEditingDepartment(null);
     setIsModalOpen(true);
   }
 
-  function openEditModal(user) {
-    setEditingUser(user);
+  function openEditModal(department) {
+    setEditingDepartment(department);
     setOpenMenuId(null);
     setIsModalOpen(true);
   }
 
   function closeModal() {
     setIsModalOpen(false);
-    setEditingUser(null);
+    setEditingDepartment(null);
   }
 
-  async function handleSaveUser(formData) {
-    const payload = {
-      name: formData.name.trim(),
-      email: formData.email.trim().toLowerCase(),
-      role: formData.role,
-      department: formData.department,
-      designation: formData.designation.trim(),
-    };
-    if (formData.phone.trim()) {
-      payload.phone = formData.phone.trim();
-    }
-    if (editingUser) {
-      if (formData.password) {
-        payload.password = formData.password;
-      }
+  async function handleSaveDepartment(payload) {
+    if (editingDepartment) {
       await runMutation(
-        updateMutation.mutateAsync({ userId: editingUser.id, payload }),
-        "Unable to update user. Please try again.",
+        updateMutation.mutateAsync({
+          departmentId: editingDepartment.id,
+          payload,
+        }),
+        "Unable to update department. Please try again.",
       );
+
       return;
     }
-    payload.employeeId = formData.employeeId.trim();
-    payload.password = formData.password;
+
     await runMutation(
       createMutation.mutateAsync(payload),
-      "Unable to create user. Please try again.",
+      "Unable to create department. Please try again.",
     );
   }
 
-  function toggleUserStatus(user) {
+  function toggleDepartmentStatus(department) {
     statusMutation.mutate({
-      userId: user.id,
-      isActive: !user.isActive,
+      departmentId: department.id,
+      isActive: !department.isActive,
     });
   }
 
   function clearFilters() {
     setSearchTerm("");
-    setRoleFilter("All");
     setStatusFilter("All");
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const userStats = useMemo(
+  const departmentStats = useMemo(
     () =>
-      users.reduce(
-        (stats, user) => ({
+      departments.reduce(
+        (stats, department) => ({
           total: stats.total + 1,
-          active: stats.active + (user.isActive ? 1 : 0),
-          hr: stats.hr + (user.role === "HR_MANAGER" ? 1 : 0),
-          employee: stats.employee + (user.role === "EMPLOYEE" ? 1 : 0),
+          active: stats.active + (department.isActive ? 1 : 0),
+          unassigned: stats.unassigned + (department.managerId ? 0 : 1),
         }),
-        { total: 0, active: 0, hr: 0, employee: 0 },
+        { total: 0, active: 0, unassigned: 0 },
       ),
-    [users],
+    [departments],
   );
 
   const summaryCards = [
     {
-      label: "Total Users",
-      value: userStats.total,
-      icon: Users,
+      label: "Total Departments",
+      value: departmentStats.total,
+      icon: Building2,
       iconClass: "bg-indigo-100 text-indigo-600",
     },
     {
-      label: "Active Users",
-      value: userStats.active,
-      icon: UserRound,
+      label: "Active Departments",
+      value: departmentStats.active,
+      icon: Building2,
       iconClass: "bg-emerald-100 text-emerald-700",
     },
     {
-      label: "HR Users",
-      value: userStats.hr,
-      icon: ShieldCheck,
+      label: "Unassigned Managers",
+      value: departmentStats.unassigned,
+      icon: UserRound,
       iconClass: "bg-amber-100 text-amber-700",
-    },
-    {
-      label: "Employees",
-      value: userStats.employee,
-      icon: Users,
-      iconClass: "bg-sky-100 text-sky-700",
     },
   ];
 
-  if (isLoadingUsers) {
+  if (isLoadingDepartments) {
     return (
       <div className="mx-auto max-w-7xl">
         <div className="rounded-xl border border-violet-200 bg-white px-6 py-10 text-center shadow-sm">
           <p className="text-sm font-semibold text-slate-700">
-            Loading users...
+            Loading departments...
           </p>
         </div>
       </div>
     );
   }
 
-  if (isUsersError) {
+  if (isDepartmentsError) {
     return (
       <div className="mx-auto max-w-7xl">
         <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center shadow-sm">
           <p className="text-sm font-semibold text-red-700">
-            {usersError?.response?.data?.message || "Unable to load users."}
+            {departmentsError?.response?.data?.message ||
+              "Unable to load departments."}
           </p>
         </div>
       </div>
@@ -221,11 +231,11 @@ function UserManagementPage() {
       <section className="flex flex-col justify-between gap-5 xl:flex-row xl:items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            User Management
+            Department Management
           </h1>
 
           <p className="mt-1 text-slate-500">
-            Create users, assign roles, and manage account access.
+            Create departments, assign HR managers, and set leave limits.
           </p>
         </div>
 
@@ -234,8 +244,8 @@ function UserManagementPage() {
           className="flex h-11 w-fit items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 text-sm font-semibold text-white transition hover:bg-indigo-700"
           onClick={openCreateModal}
         >
-          <UserPlus className="size-4" />
-          Add User
+          <PlusCircle className="size-4" />
+          Add Department
         </button>
       </section>
 
@@ -253,7 +263,7 @@ function UserManagementPage() {
         </div>
       )}
 
-      <section className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-8 grid gap-5 sm:grid-cols-3">
         {summaryCards.map(({ label, value, icon: Icon, iconClass }) => (
           <SummaryCard key={label}>
             <div className="flex items-start justify-between">
@@ -273,28 +283,17 @@ function UserManagementPage() {
 
       <section className="mt-6 rounded-xl border border-violet-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
-          <div className="relative md:col-span-2 xl:col-span-6">
+          <div className="relative md:col-span-2 xl:col-span-8">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
 
             <input
               type="search"
               value={searchTerm}
-              placeholder="Search users by name, email, ID, or department..."
+              placeholder="Search departments by name, code, or manager..."
               className="h-11 w-full rounded-lg border border-violet-200 bg-violet-50/40 pr-4 pl-10 text-sm outline-none focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100"
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </div>
-
-          <select
-            value={roleFilter}
-            className={`${filterClass} xl:col-span-2`}
-            onChange={(event) => setRoleFilter(event.target.value)}
-          >
-            <option value="All">All Roles</option>
-            <option value="EMPLOYEE">Employee</option>
-            <option value="HR_MANAGER">HR Manager</option>
-            <option value="ADMIN">Admin</option>
-          </select>
 
           <select
             value={statusFilter}
@@ -318,43 +317,43 @@ function UserManagementPage() {
 
       <section className="mt-6 overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
         <header className="border-b border-violet-200 px-6 py-5">
-          <h2 className="text-xl font-bold text-slate-950">Users</h2>
+          <h2 className="text-xl font-bold text-slate-950">Departments</h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Showing {filteredUsers.length} of {users.length} account
-            {users.length === 1 ? "" : "s"}.
+            Showing {filteredDepartments.length} of {departments.length}{" "}
+            department{departments.length === 1 ? "" : "s"}.
           </p>
         </header>
 
-        <UserRowHeader />
+        <DepartmentRowHeader />
 
-        <div>
-          {filteredUsers.map((user, index) => (
-            <UserRow
-              key={user.id}
-              user={user}
-              isMenuOpen={openMenuId === user.id}
+        <div role="rowgroup">
+          {filteredDepartments.map((department, index) => (
+            <DepartmentRow
+              key={department.id}
+              department={department}
+              isMenuOpen={openMenuId === department.id}
               isStatusUpdating={statusMutation.isPending}
-              openUpward={index >= filteredUsers.length - 2}
+              openUpward={index >= filteredDepartments.length - 2}
               onToggleMenu={() =>
                 setOpenMenuId((currentId) =>
-                  currentId === user.id ? null : user.id,
+                  currentId === department.id ? null : department.id,
                 )
               }
-              onEdit={() => openEditModal(user)}
-              onToggleStatus={() => toggleUserStatus(user)}
+              onEdit={() => openEditModal(department)}
+              onToggleStatus={() => toggleDepartmentStatus(department)}
             />
           ))}
         </div>
 
-        {filteredUsers.length === 0 && (
+        {filteredDepartments.length === 0 && (
           <div className="px-6 py-16 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-              <Users className="size-6" />
+              <Building2 className="size-6" />
             </div>
 
             <h2 className="mt-4 text-lg font-bold text-slate-900">
-              No users found
+              No departments found
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
@@ -364,21 +363,56 @@ function UserManagementPage() {
         )}
       </section>
 
-      <UserModal
+      <DepartmentModal
         isOpen={isModalOpen}
-        user={editingUser}
-        departments={departments}
-        isLoadingDepartments={isLoadingDepartments}
-        isDepartmentsError={isDepartmentsError}
+        department={editingDepartment}
+        managers={managers}
+        isLoadingManagers={isLoadingManagers}
         isSaving={isSaving}
         onClose={closeModal}
-        onSave={handleSaveUser}
+        onSave={handleSaveDepartment}
       />
     </div>
   );
 }
 
+function normalizeDepartmentsResponse(response) {
+  const rawDepartments =
+    response?.departments || response?.data?.departments || response?.data || [];
+
+  if (!Array.isArray(rawDepartments)) return [];
+
+  return rawDepartments.map((department) => {
+    const manager = department.manager;
+
+    return {
+      id: department._id || department.id,
+      name: department.name || "Department",
+      code: department.code || "",
+      description: department.description || "",
+      managerId:
+        manager?._id || manager?.id || (typeof manager === "string" ? manager : ""),
+      managerName: manager?.name || "",
+      maximumConcurrentLeaves: department.maximumConcurrentLeaves ?? 3,
+      isActive: department.isActive !== false,
+      raw: department,
+    };
+  });
+}
+
+function normalizeManagersResponse(response) {
+  const rawUsers =
+    response?.users || response?.data?.users || response?.data?.docs || response?.data || [];
+
+  if (!Array.isArray(rawUsers)) return [];
+
+  return rawUsers.map((user) => ({
+    id: user._id || user.id,
+    name: user.name || "User",
+  }));
+}
+
 const filterClass =
   "h-11 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100";
 
-export default UserManagementPage;
+export default DepartmentManagementPage;

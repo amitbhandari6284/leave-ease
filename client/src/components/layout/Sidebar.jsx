@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Building2,
   CalendarDays,
   ClipboardClock,
   FileText,
@@ -69,6 +70,12 @@ const adminLinks = [
     label: "User Management",
     to: "/users",
     icon: Users,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Departments",
+    to: "/departments",
+    icon: Building2,
     roles: ["ADMIN"],
   },
   {

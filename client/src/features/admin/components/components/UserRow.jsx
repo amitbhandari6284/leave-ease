@@ -1,6 +1,6 @@
 import { EllipsisVertical, Pencil, Power } from "lucide-react";
 import StatusBadge from "../../../components/ui/StatusBadge";
-import UserIdentity from "./UserIdentity";
+import UserIdentity from "./EntityIdentity";
 import RoleBadge from "./RoleBadge";
 
 const ROW_GRID =

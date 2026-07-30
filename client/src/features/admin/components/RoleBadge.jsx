@@ -1,8 +1,8 @@
-import { formatRoleLabel } from "../lib/helper";
+import { formatRoleLabel } from "../lib/helper.js"
 
 const ROLE_CLASSES = {
   ADMIN: "bg-red-100 text-red-700",
-  HR: "bg-amber-100 text-amber-700",
+  HR_MANAGER: "bg-amber-100 text-amber-700",
   EMPLOYEE: "bg-indigo-100 text-indigo-700",
 };
 
