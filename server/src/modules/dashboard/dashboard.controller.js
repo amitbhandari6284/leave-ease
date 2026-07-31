@@ -8,7 +8,7 @@ import User from "../users/user.model.js";
 
 import { LEAVE_STATUSES, LEAVE_STATUS_VALUES } from "../../constants/leaveStatuses.js";
 import { USER_ROLES, USER_ROLE_VALUES } from "../../constants/roles.js";
-import AppError from "../../utils/AppError.js";
+import { AppError } from "../../utils/AppError.js";
 
 function getApplicationToday() {
   const formatter = new Intl.DateTimeFormat("en-US", {
