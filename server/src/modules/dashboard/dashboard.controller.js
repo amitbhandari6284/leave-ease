@@ -7,9 +7,8 @@ import Notification from "../notifications/notification.model.js";
 import User from "../users/user.model.js";
 
 import { LEAVE_STATUSES, LEAVE_STATUS_VALUES } from "../../constants/leaveStatuses.js";
-
 import { USER_ROLES, USER_ROLE_VALUES } from "../../constants/roles.js";
-import { AppError } from "../../utils/AppError.js";
+import AppError from "../../utils/AppError.js";
 
 function getApplicationToday() {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -22,9 +21,7 @@ function getApplicationToday() {
   const parts = formatter.formatToParts(new Date());
 
   const year = Number(parts.find((part) => part.type === "year")?.value);
-
   const month = Number(parts.find((part) => part.type === "month")?.value);
-
   const day = Number(parts.find((part) => part.type === "day")?.value);
 
   return new Date(Date.UTC(year, month - 1, day));
@@ -93,7 +90,6 @@ async function getUserBalanceSummary(userId, year) {
 
   balances.sort((firstBalance, secondBalance) => {
     const firstName = firstBalance.leaveType?.name || "";
-
     const secondName = secondBalance.leaveType?.name || "";
 
     return firstName.localeCompare(secondName);
@@ -140,17 +136,10 @@ async function getUpcomingHolidays(today) {
     .limit(5);
 }
 
-/*
-  Shared by both the HR and Admin dashboards, which previously
-  duplicated this exact populate/sort/limit shape with only the
-  department scoping differing. Passing an already-built
-  additionalFilter keeps both call sites in sync going forward.
-*/
-async function getUpcomingApprovedLeave(today, additionalFilter = {}, limit = 10) {
+async function getUpcomingApprovedLeave(today, filter = {}) {
   return LeaveRequest.find({
-    ...additionalFilter,
+    ...filter,
     status: LEAVE_STATUSES.APPROVED,
-
     endDate: {
       $gte: today,
     },
@@ -161,7 +150,55 @@ async function getUpcomingApprovedLeave(today, additionalFilter = {}, limit = 10
     .sort({
       startDate: 1,
     })
-    .limit(limit);
+    .limit(10);
+}
+
+async function getDepartmentAvailability(managedDepartments, departmentIds, today) {
+  const [activeCounts, onLeaveCounts] = await Promise.all([
+    User.aggregate([
+      {
+        $match: {
+          department: { $in: departmentIds },
+          role: USER_ROLES.EMPLOYEE,
+          isActive: true,
+        },
+      },
+      {
+        $group: { _id: "$department", count: { $sum: 1 } },
+      },
+    ]),
+
+    LeaveRequest.aggregate([
+      {
+        $match: {
+          department: { $in: departmentIds },
+          status: LEAVE_STATUSES.APPROVED,
+          startDate: { $lte: today },
+          endDate: { $gte: today },
+        },
+      },
+      {
+        $group: { _id: "$department", count: { $sum: 1 } },
+      },
+    ]),
+  ]);
+
+  const activeMap = new Map(activeCounts.map((row) => [String(row._id), row.count]));
+  const onLeaveMap = new Map(onLeaveCounts.map((row) => [String(row._id), row.count]));
+
+  return managedDepartments.map((department) => {
+    const total = activeMap.get(String(department._id)) || 0;
+    const onLeave = onLeaveMap.get(String(department._id)) || 0;
+
+    return {
+      id: department._id,
+      name: department.name,
+      code: department.code,
+      total,
+      onLeave,
+      present: Math.max(total - onLeave, 0),
+    };
+  });
 }
 
 async function getEmployeeDashboard({ user, year, today, startOfYear, startOfNextYear }) {
@@ -170,7 +207,6 @@ async function getEmployeeDashboard({ user, year, today, startOfYear, startOfNex
 
     getLeaveStatusCounts({
       employee: user._id,
-
       startDate: {
         $gte: startOfYear,
         $lt: startOfNextYear,
@@ -180,7 +216,6 @@ async function getEmployeeDashboard({ user, year, today, startOfYear, startOfNex
     LeaveRequest.find({
       employee: user._id,
       status: LEAVE_STATUSES.APPROVED,
-
       endDate: {
         $gte: today,
       },
@@ -202,15 +237,12 @@ async function getEmployeeDashboard({ user, year, today, startOfYear, startOfNex
   return {
     role: USER_ROLES.EMPLOYEE,
     year,
-
     leaveBalances: balanceData,
-
     leaveRequests: {
       total: Object.values(requestCounts).reduce((total, count) => total + count, 0),
       byStatus: requestCounts,
       upcomingApproved: upcomingLeave,
     },
-
     unreadNotificationCount,
     upcomingHolidays,
   };
@@ -238,7 +270,6 @@ async function getHrDashboard({ user, year, today, startOfYear, startOfNextYear 
     department: {
       $in: departmentIds,
     },
-
     startDate: {
       $gte: startOfYear,
       $lt: startOfNextYear,
@@ -254,6 +285,7 @@ async function getHrDashboard({ user, year, today, startOfYear, startOfNextYear 
     ownBalanceData,
     unreadNotificationCount,
     upcomingHolidays,
+    departmentAvailability,
   ] = await Promise.all([
     User.countDocuments({
       ...teamFilter,
@@ -272,13 +304,10 @@ async function getHrDashboard({ user, year, today, startOfYear, startOfNextYear 
       department: {
         $in: departmentIds,
       },
-
       status: LEAVE_STATUSES.APPROVED,
-
       startDate: {
         $lte: today,
       },
-
       endDate: {
         $gte: today,
       },
@@ -296,31 +325,28 @@ async function getHrDashboard({ user, year, today, startOfYear, startOfNextYear 
     }),
 
     getUpcomingHolidays(today),
+
+    getDepartmentAvailability(managedDepartments, departmentIds, today),
   ]);
 
   return {
     role: USER_ROLES.HR_MANAGER,
     year,
-
     managedDepartments: {
       count: managedDepartments.length,
       departments: managedDepartments,
     },
-
     team: {
       activeEmployeeCount,
       employeesOnLeaveToday,
     },
-
     reviewQueue: {
       pendingReviewCount,
       requestCounts,
     },
-
     upcomingTeamLeave,
-
+    departmentAvailability,
     ownLeaveBalances: ownBalanceData,
-
     unreadNotificationCount,
     upcomingHolidays,
   };
@@ -361,11 +387,9 @@ async function getAdminDashboard({ user, year, today, startOfYear, startOfNextYe
 
     LeaveRequest.countDocuments({
       status: LEAVE_STATUSES.APPROVED,
-
       startDate: {
         $lte: today,
       },
-
       endDate: {
         $gte: today,
       },
@@ -391,7 +415,6 @@ async function getAdminDashboard({ user, year, today, startOfYear, startOfNextYe
   return {
     role: USER_ROLES.ADMIN,
     year,
-
     organization: {
       totalActiveUsers,
       activeUsersByRole: activeUserRoleCounts,
@@ -399,13 +422,11 @@ async function getAdminDashboard({ user, year, today, startOfYear, startOfNextYe
       activeLeaveTypeCount,
       employeesOnLeaveToday,
     },
-
     leaveRequests: {
       pendingRequestCount,
       total: Object.values(requestCounts).reduce((total, count) => total + count, 0),
       byStatus: requestCounts,
     },
-
     upcomingOrganizationLeave,
     unreadNotificationCount,
     upcomingHolidays,
@@ -420,8 +441,9 @@ export async function getDashboardSummary(req, res, next) {
 
     const year = Number(requestedYear);
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       throw new AppError("Please provide a valid dashboard year", 400, "INVALID_YEAR");
+    }
 
     const { startOfYear, startOfNextYear } = getYearRange(year);
 
