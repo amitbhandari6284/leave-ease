@@ -1,6 +1,6 @@
 import { EllipsisVertical, Eye, XCircle } from "lucide-react";
 
-import { canCancelApplication, formatDate, formatDateRange } from "../../lib/helper.js";
+import { canCancelApplication, formatDate, formatDateRange } from "../../utils/helper.js";
 
 import LeaveTypeDisplay from "./LeaveTypeDisplay.jsx";
 import StatusBadge from "./StatusBadge.jsx";

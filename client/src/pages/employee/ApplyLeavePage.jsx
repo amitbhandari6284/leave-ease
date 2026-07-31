@@ -5,16 +5,17 @@ import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router";
 
 import DateRangePicker from "../../components/ui/DateRangePicker.jsx";
+
 import BalanceImpactCard from "../../features/employee/apply/components/BalanceImpactCard.jsx";
 import FormField from "../../features/employee/apply/components/FormField.jsx";
 import PolicyHelpCard from "../../features/employee/apply/components/PolicyHelpCard.jsx";
 import SelectedFile from "../../features/employee/apply/components/SelectedFile.jsx";
 import TeamAvailabilityCard from "../../features/employee/apply/components/TeamAvailabilityCard.jsx";
 
-import { createLeaveRequest, getLeaveTypes, getMyLeaveBalances } from "../../features/leave/lib/leaveApi.js";
-import { calculateWorkingDays, getTodayInputValue } from "../../lib/calculateWorkingDays.js";
-import { parseInputDate, toInputDateString } from "../../lib/calendarUtils.js";
-import { normalizeLeaveBalancesResponse, normalizeLeaveTypesResponse } from "../../features/employee/apply/lib/helper.js";
+import { normalizeLeaveBalancesResponse, normalizeLeaveTypesResponse } from "../../features/employee/apply/utils/normalizeApiData.js";
+import { createLeaveRequest, getLeaveTypes, getMyLeaveBalances } from "../../features/leave/utils/leaveApi.js";
+import { calculateWorkingDays, getTodayInputValue } from "../../utils/calculateWorkingDays.js";
+import { parseInputDate, toInputDateString } from "../../utils/calendarUtils.js";
 
 const allowedFileTypes = ["application/pdf", "image/png", "image/jpeg"];
 

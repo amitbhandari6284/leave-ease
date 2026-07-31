@@ -5,16 +5,16 @@ import AppLayout from "../components/layout/AppLayout";
 import ProtectedRoute from "../features/auth/components/ProtectedRoute";
 import PublicRoute from "../features/auth/components/PublicRoute";
 
-import AdminDashboard from "../pages/admin/AdminDashboard";
+import AdminDashboard from "../pages/dashboard/AdminDashboard";
 import DepartmentManagementPage from "../pages/admin/DepartmentManagementPage";
 import PolicyManagementPage from "../pages/admin/PolicyManagementPage";
 import UserManagementPage from "../pages/admin/UserManagementPage";
 import LoginPage from "../pages/auth/LoginPage";
 import ApplyLeavePage from "../pages/employee/ApplyLeavePage";
-import EmployeeDashboard from "../pages/employee/EmployeeDashboard";
+import EmployeeDashboard from "../pages/dashboard/EmployeeDashboard";
 import MyLeavesPage from "../pages/employee/MyLeavesPage";
 import DepartmentCalendarPage from "../pages/hr/DepartmentCalendarPage";
-import HrDashboard from "../pages/hr/HrDashboard";
+import HrDashboard from "../pages/dashboard/HrDashboard";
 import PendingRequestsPage from "../pages/hr/PendingRequestsPage";
 
 function App() {

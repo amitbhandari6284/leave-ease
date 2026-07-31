@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import MonthCalendar from "./MonthCalendar.jsx";
-import { addMonths, formatShortDate, startOfToday } from "../../lib/calendarUtils.js";
+import { addMonths, formatShortDate, startOfToday } from "../../utils/calendarUtils.js";
 
 const DEFAULT_TRIGGER_CLASS =
   "flex shrink-0 flex-col items-start rounded-xl px-3 py-2.5 text-left whitespace-nowrap transition hover:bg-slate-50 sm:rounded-full sm:px-6 sm:py-3";

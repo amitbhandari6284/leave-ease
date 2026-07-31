@@ -2,7 +2,7 @@ import { ChevronDown, X } from "lucide-react";
 import { useMemo } from "react";
 
 import DateRangePicker from "../../../../components/ui/DateRangePicker.jsx";
-import { parseInputDate, toInputDateString } from "../../../../lib/calendarUtils.js";
+import { parseInputDate, toInputDateString } from "../../../../utils/calendarUtils.js";
 
 export default function FilterAndSearch({ applications, filters, onUpdateFilter, onClearFilters }) {
   const leaveTypes = useMemo(() => [...new Set(applications.map((application) => application.type))], [applications]);

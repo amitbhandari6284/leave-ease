@@ -1,4 +1,4 @@
-import { getStatusBadgeClass } from "../../lib/helper.js";
+import { getStatusBadgeClass } from "../../utils/helper.js";
 
 function StatusBadge({ status, className }) {
   return (

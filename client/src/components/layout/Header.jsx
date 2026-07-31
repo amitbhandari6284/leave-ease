@@ -1,6 +1,6 @@
 import { Bell, Menu } from "lucide-react";
 
-import { useAuth } from "../../features/auth/components/AuthContext";
+import { useAuth } from "../../features/auth/context/AuthContext";
 import { useLogout } from "../../features/auth/hooks/useLogout";
 
 function Header({ onOpenSidebar }) {

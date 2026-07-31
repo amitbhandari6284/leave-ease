@@ -1,6 +1,6 @@
 import { FileText, X } from "lucide-react";
 
-import { canCancelApplication, formatDate } from "../../lib/helper.js";
+import { canCancelApplication, formatDate } from "../../utils/helper.js";
 
 import StatusBadge from "./StatusBadge.jsx";
 

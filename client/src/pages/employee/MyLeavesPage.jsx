@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import ApplicationDetailsDialog from "../../components/ui/ApplicationDetailsDialog.jsx";
-import Summary from "../../features/employee/history/components/Summary.jsx";
 import FilterAndSearch from "../../features/employee/history/components/FilterAndSearch.jsx";
+import Summary from "../../features/employee/history/components/Summary.jsx";
 
-import { rowsToCsv } from "../../lib/helper.js";
-import { cancelLeaveRequest, getMyLeaveRequests } from "../../features/leave/lib/leaveApi.js";
-import { normalizeLeaveRequestsResponse } from "../../features/employee/history/lib/leaveMappers.js";
-import { applicationMatchesFilters } from "../../features/employee/history/lib/applicationFilters.js";
+import Error from "../../components/ui/Error.jsx";
+import Loader from "../../components/ui/Loader.jsx";
 import Applications from "../../features/employee/history/components/Applications.jsx";
+import { applicationMatchesFilters } from "../../features/employee/history/utils/applicationFilters.js";
+import { normalizeLeaveRequestsResponse } from "../../features/employee/history/utils/leaveMappers.js";
+import { cancelLeaveRequest, getMyLeaveRequests } from "../../features/leave/utils/leaveApi.js";
+import { rowsToCsv } from "../../utils/helper.js";
 
 const DEFAULT_FILTERS = {
   search: "",
@@ -146,27 +148,9 @@ function MyLeavesPage() {
     setMessage("Leave applications exported successfully.");
   }
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-xl border border-violet-200 bg-white px-6 py-10 text-center shadow-sm">
-          <p className="text-sm font-semibold text-slate-700">Loading leave requests...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) { return (<Loader>Loading leave requests...</Loader>) }
 
-  if (isError) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center shadow-sm">
-          <p className="text-sm font-semibold text-red-700">
-            {error?.response?.data?.message || "Unable to load leave requests."}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (isError) { return (<Error> {error?.response?.data?.message || "Unable to load leave requests."} </Error>) }
 
   return (
     <div className="mx-auto max-w-7xl">

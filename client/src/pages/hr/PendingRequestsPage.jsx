@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import EmptyState from "../../components/ui/EmptyState.jsx";
-import SummaryCard from "../../components/ui/SummaryCard.jsx";
 import Pagination from "../../components/ui/Pagination.jsx";
+import SummaryCard from "../../components/ui/SummaryCard.jsx";
+
 import Requests from "../../features/hr/components/Requests.jsx";
 import ReviewRequestDrawer from "../../features/hr/components/ReviewRequestDrawer.jsx";
-import { normalizeReviewQueueResponse } from "../../features/hr/lib/normalize.js";
-import { decideLeaveRequest, getReviewQueue } from "../../features/leave/lib/leaveApi.js";
+import { normalizeReviewQueueResponse } from "../../features/hr/utils/normalize.js";
+import { decideLeaveRequest, getReviewQueue } from "../../features/leave/utils/leaveApi.js";
 
 const STATUS_TABS = ["All", "Pending", "Approved", "Rejected", "Cancelled"];
 const PAGE_SIZE = 10;
@@ -40,7 +41,14 @@ function PendingRequestsPage() {
       }),
   });
 
-  const requests = useMemo(() => normalizeReviewQueueResponse(data), [data]);
+  const requests = useMemo(() => {
+    const normalized = normalizeReviewQueueResponse(data);
+    return [...normalized].sort((a, b) => {
+      const dateA = new Date(a.submittedOn);
+      const dateB = new Date(b.submittedOn);
+      return dateB - dateA; // Descending order
+    });
+  }, [data]);
   const pagination = data?.pagination;
 
   const decisionMutation = useMutation({

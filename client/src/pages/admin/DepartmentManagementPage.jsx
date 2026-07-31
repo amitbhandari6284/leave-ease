@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, PlusCircle, Search, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import SummaryCard from "../../components/ui/SummaryCard";
-import DepartmentRow, { DepartmentRowHeader } from "../../features/admin/components/departments/DepartmentRow";
-import DepartmentModal from "../../features/admin/components/departments/DepartmentModal";
+import Error from "../../components/ui/Error";
+import Loader from "../../components/ui/Loader";
 
-import { createDepartment, getDepartments, getUsers, updateDepartment, updateDepartmentStatus } from "../../features/admin/lib/adminApi";
+import DepartmentModal from "../../features/admin/components/department/DepartmentModal.jsx";
+import DepartmentRow, { DepartmentRowHeader } from "../../features/admin/components/department/DepartmentRow.jsx";
+
+import { createDepartment, getDepartments, getUsers, updateDepartment, updateDepartmentStatus } from "../../features/admin/utils/adminApi.js";
 
 async function runMutation(mutationPromise, fallbackMessage) {
   try {
@@ -20,7 +23,6 @@ async function runMutation(mutationPromise, fallbackMessage) {
 
 function DepartmentManagementPage() {
   const queryClient = useQueryClient();
-
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -28,49 +30,33 @@ function DepartmentManagementPage() {
   const [editingDepartment, setEditingDepartment] = useState(null);
   const [message, setMessage] = useState("");
 
-  const {
-    data: departmentsData,
-    isLoading: isLoadingDepartments,
-    isError: isDepartmentsError,
-    error: departmentsError,
-  } = useQuery({
-    queryKey: ["departments", "all"],
-    queryFn: () => getDepartments({ includeInactive: true }),
-  });
+  const { data: departmentsData, isLoading: isLoadingDepartments, isError: isDepartmentsError, error: departmentsError, } = useQuery(
+    {
+      queryKey: ["departments", "all"],
+      queryFn: () => getDepartments({ includeInactive: true }),
+    });
 
-  const {
-    data: managersData,
-    isLoading: isLoadingManagers,
-  } = useQuery({
-    queryKey: ["users", "role", "HR_MANAGER"],
-    queryFn: () => getUsers({ role: "HR_MANAGER", limit: 50 }),
-  });
+  const { data: managersData, isLoading: isLoadingManagers, } = useQuery(
+    {
+      queryKey: ["users", "role", "HR_MANAGER"],
+      queryFn: () => getUsers({ role: "HR_MANAGER", limit: 50 }),
+    });
 
-  const departments = useMemo(
-    () => normalizeDepartmentsResponse(departmentsData),
-    [departmentsData],
-  );
-
-  const managers = useMemo(
-    () => normalizeManagersResponse(managersData),
-    [managersData],
-  );
+  const departments = useMemo(() => normalizeDepartmentsResponse(departmentsData), [departmentsData]);
+  const managers = useMemo(() => normalizeManagersResponse(managersData), [managersData]);
 
   const filteredDepartments = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-
     return departments.filter((department) => {
       const matchesSearch =
         !normalizedSearch ||
         department.name.toLowerCase().includes(normalizedSearch) ||
         department.code.toLowerCase().includes(normalizedSearch) ||
         department.managerName.toLowerCase().includes(normalizedSearch);
-
       const matchesStatus =
         statusFilter === "All" ||
         (statusFilter === "Active" && department.isActive) ||
         (statusFilter === "Inactive" && !department.isActive);
-
       return matchesSearch && matchesStatus;
     });
   }, [departments, searchTerm, statusFilter]);
@@ -110,9 +96,7 @@ function DepartmentManagementPage() {
         setOpenMenuId(null);
       }
     }
-
     document.addEventListener("pointerdown", handleOutsideClick);
-
     return () => {
       document.removeEventListener("pointerdown", handleOutsideClick);
     };
@@ -143,10 +127,8 @@ function DepartmentManagementPage() {
         }),
         "Unable to update department. Please try again.",
       );
-
       return;
     }
-
     await runMutation(
       createMutation.mutateAsync(payload),
       "Unable to create department. Please try again.",
@@ -201,30 +183,9 @@ function DepartmentManagementPage() {
     },
   ];
 
-  if (isLoadingDepartments) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-xl border border-violet-200 bg-white px-6 py-10 text-center shadow-sm">
-          <p className="text-sm font-semibold text-slate-700">
-            Loading departments...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoadingDepartments) { return (<Loader> Loading departments... </Loader>) }
 
-  if (isDepartmentsError) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center shadow-sm">
-          <p className="text-sm font-semibold text-red-700">
-            {departmentsError?.response?.data?.message ||
-              "Unable to load departments."}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (isDepartmentsError) { return (<Error> {departmentsError?.response?.data?.message || "Unable to load departments."} </Error>) }
 
   return (
     <div className="mx-auto max-w-7xl">

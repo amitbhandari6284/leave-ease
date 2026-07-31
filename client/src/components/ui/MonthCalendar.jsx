@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { DAY_LABELS, getMonthLabel, getMonthMatrix, isBetween, isSameDay } from "../../lib/calendarUtils.js";
+import { DAY_LABELS, getMonthLabel, getMonthMatrix, isBetween, isSameDay } from "../../utils/calendarUtils.js";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December",];
 

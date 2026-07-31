@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, ShieldCheck, UserPlus, UserRound, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
+import Error from "../../components/ui/Error.jsx";
+import Loader from "../../components/ui/Loader.jsx";
 import SummaryCard from "../../components/ui/SummaryCard";
-import UserRow, { UserRowHeader } from "../../features/admin/components/users/UserRow";
-import UserModal from "../../features/admin/components/users/UserModal";
 
-import { normalizeDepartmentsResponse, normalizeUsersResponse, runMutation } from "../../features/admin/lib/normalize.js"
-import { createUser, getDepartments, getUsers, updateUser, updateUserStatus } from "../../features/admin/lib/adminApi.js";
+import UserModal from "../../features/admin/components/user/components/UserModal.jsx";
+import UserRow, { UserRowHeader } from "../../features/admin/components/user/components/UserRow.jsx";
+
+import { normalizeDepartmentsResponse, normalizeUsersResponse, runMutation } from "../../features/admin/components/user/utils/normalizeApiData.js";
+import { createUser, getDepartments, getUsers, updateUser, updateUserStatus } from "../../features/admin/utils/adminApi.js";
 
 function UserManagementPage() {
   const queryClient = useQueryClient();
@@ -192,29 +195,9 @@ function UserManagementPage() {
     },
   ];
 
-  if (isLoadingUsers) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-xl border border-violet-200 bg-white px-6 py-10 text-center shadow-sm">
-          <p className="text-sm font-semibold text-slate-700">
-            Loading users...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoadingUsers) { return (<Loader> Loading users... </Loader>) }
 
-  if (isUsersError) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center shadow-sm">
-          <p className="text-sm font-semibold text-red-700">
-            {usersError?.response?.data?.message || "Unable to load users."}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (isUsersError) { return (<Error> {usersError?.response?.data?.message || "Unable to load users."} </Error>) }
 
   return (
     <div className="mx-auto max-w-7xl">

@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router";
 
-import { useAuth } from "./AuthContext";
+import { useAuth } from "../context/AuthContext";
 import AuthLoader from "./AuthLoader";
 
 export default function PublicRoute() {
