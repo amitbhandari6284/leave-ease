@@ -2,7 +2,7 @@
 
 A role-based employee leave management system built on the MERN stack. LeaveEase handles the usual headache of managing leave requests, balances, approvals, holidays, and reporting across an organization — with separate workflows for employees, HR managers, and admins.
 
-> The backend is fully built out. Working on the React frontend next.
+> The backend is fully built out. Frontend pending.
 
 ## What it does
 
